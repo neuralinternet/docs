@@ -1,0 +1,334 @@
+---
+
+title: "Scoring System"
+
+---
+
+
+
+import CollapsibleAside from '@components/CollapsibleAside.astro';
+
+import SourceLink from '@components/SourceLink.astro';
+
+
+
+<CollapsibleAside title="Relevant Source Files">
+
+  <SourceLink text="neurons/Validator/calculate_pow_score.py" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/Validator/calculate_pow_score.py" />
+
+  <SourceLink text="neurons/validator.py" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/validator.py" />
+
+</CollapsibleAside>
+
+
+
+
+
+
+
+
+The scoring system evaluates miner performance based on their GPU capabilities and proof verification results. It calculates normalized scores that determine each miner's weight in the network's incentive mechanism. The system integrates Proof-of-GPU validation results with configurable GPU performance metrics to assign fair scores across the network.
+
+For information about the Proof-of-GPU validation process that generates the data used in scoring, see [Proof of GPU](/validator-system/proof-of-gpu#2.1). For details about how scores are stored and retrieved, see [Database Operations](/validator-system/database-operations#2.3).
+
+## Score Calculation Architecture
+
+The scoring system operates through several interconnected components that collect GPU performance data, calculate scores, and synchronize results across the network.
+
+```mermaid
+flowchart TD
+    subgraph "Data Sources"
+        POG["Proof-of-GPU Results<br/>test_miner_gpu()"]
+        WANDB["WandB Distributed State<br/>get_stats_allocated()"]
+        CONFIG["GPU Performance Config<br/>config.yaml"]
+        LOCALDB["Local Database<br/>pog_stats table"]
+    end
+    
+    subgraph "Score Calculation Engine"
+        CALC["calc_score_pog()<br/>calculate_pow_score.py"]
+        SYNC["sync_scores()<br/>validator.py"]
+        NORM["Score Normalization<br/>normalize()"]
+    end
+    
+    subgraph "Score Storage & Distribution"
+        STATS["self.stats dict<br/>Miner Statistics"]
+        SCORES["self.scores Tensor<br/>PyTorch Tensor"]
+        WEIGHTS["Network Weights<br/>set_weights()"]
+    end
+    
+    POG --> CALC
+    CONFIG --> CALC
+    LOCALDB --> SYNC
+    WANDB --> SYNC
+    
+    CALC --> NORM
+    SYNC --> STATS
+    STATS --> SCORES
+    
+    SCORES --> WEIGHTS
+    
+    NORM -.-> STATS
+```
+
+**Score Calculation Flow**
+The system processes GPU specifications through multiple stages to produce final network weights that determine miner rewards.
+
+Sources: <SourceLink text="neurons/validator.py:312-442" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/validator.py#L312-L442" />, <SourceLink text="neurons/Validator/calculate_pow_score.py:35-63" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/Validator/calculate_pow_score.py#L35-L63" />
+
+## GPU Performance Scoring
+
+The core scoring mechanism evaluates miners based on their GPU hardware capabilities using predefined performance benchmarks and real-time validation results.
+
+### Score Calculation Formula
+
+The `calc_score_pog` function implements the primary scoring algorithm:
+
+```mermaid
+flowchart LR
+    subgraph "Input Parameters"
+        GPU_SPECS["gpu_specs<br/>{gpu_name, num_gpus}"]
+        CONFIG["config_data<br/>gpu_performance.gpu_scores"]
+        ALLOCATED["allocated_hotkeys<br/>Active Allocations"]
+    end
+    
+    subgraph "Score Calculation"
+        MAX_CALC["Calculate max_score<br/>max_gpu * 8"]
+        FACTOR["score_factor = 100/max_score"]
+        BASE_SCORE["base_score = gpu_score * num_gpus * factor"]
+        ALLOCATION["Allocation Multiplier<br/>1.0 (no bonus)"]
+        NORMALIZE["normalize(score, 0, 100)"]
+    end
+    
+    GPU_SPECS --> BASE_SCORE
+    CONFIG --> MAX_CALC
+    CONFIG --> BASE_SCORE
+    MAX_CALC --> FACTOR
+    FACTOR --> BASE_SCORE
+    BASE_SCORE --> ALLOCATION
+    ALLOCATED --> ALLOCATION
+    ALLOCATION --> NORMALIZE
+```
+
+**GPU Score Calculation Pipeline**
+The scoring formula normalizes GPU performance against the maximum possible score in the network.
+
+| Parameter | Description | Range |
+|-----------|-------------|-------|
+| `gpu_name` | GPU model identifier | String key from config |
+| `num_gpus` | Number of GPUs (capped) | 1-8 |
+| `gpu_score` | Base performance score | From config.yaml |
+| `score_factor` | Normalization factor | 100/max_possible_score |
+
+Sources: <SourceLink text="neurons/Validator/calculate_pow_score.py:35-63" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/Validator/calculate_pow_score.py#L35-L63" />
+
+### GPU Performance Configuration
+
+The system uses a configuration-driven approach to define GPU performance scores:
+
+```mermaid
+graph TD
+    subgraph "config.yaml Structure"
+        GPU_PERF["gpu_performance"]
+        GPU_SCORES["gpu_scores<br/>{GPU_MODEL: score}"]
+        GPU_TOL["gpu_tolerance_pairs<br/>Performance Tolerances"]
+    end
+    
+    subgraph "Score Processing"
+        MAX_GPU["max(gpu_scores.values())"]
+        MAX_SCORE["max_score = max_gpu * 8"]
+        FACTOR["score_factor = 100 / max_score"]
+    end
+    
+    GPU_PERF --> GPU_SCORES
+    GPU_PERF --> GPU_TOL
+    GPU_SCORES --> MAX_GPU
+    MAX_GPU --> MAX_SCORE
+    MAX_SCORE --> FACTOR
+```
+
+**Configuration-Based Scoring**
+GPU performance scores are defined in configuration files and used to normalize miner capabilities.
+
+Sources: <SourceLink text="neurons/Validator/calculate_pow_score.py:37-42" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/Validator/calculate_pow_score.py#L37-L42" />
+
+## Score Synchronization Process
+
+The validator synchronizes scores across multiple data sources to maintain consistent network state and handle distributed validation scenarios.
+
+```mermaid
+sequenceDiagram
+    participant V as Validator
+    participant DB as ComputeDb
+    participant W as WandB
+    participant S as self.stats
+    participant T as self.scores
+    
+    Note over V,T: Score Synchronization Cycle
+    V->>DB: retrieve_stats()
+    V->>W: get_allocated_hotkeys()
+    V->>W: get_stats_allocated()
+    V->>W: get_penalized_hotkeys_checklist_bak()
+    
+    loop For each UID
+        V->>V: Check if uid in queryable_uids
+        alt UID not queryable
+            V->>S: Set score = 0, own_score = True
+            V->>T: scores[uid] = 0
+            V->>DB: DELETE FROM pog_stats
+        else UID queryable
+            V->>DB: get_pog_specs(hotkey)
+            alt Local specs found
+                V->>V: calc_score_pog(gpu_specs)
+                V->>S: Set own_score = True
+            else No local specs
+                V->>W: Use stats_allocated fallback
+                V->>S: Set own_score = False
+            end
+            V->>S: Apply penalty if hotkey penalized
+            V->>T: scores[uid] = calculated_score
+        end
+    end
+    
+    V->>DB: write_stats(stats)
+```
+
+**Score Synchronization Sequence**
+The validator coordinates between local database, WandB distributed state, and in-memory score tracking.
+
+Sources: <SourceLink text="neurons/validator.py:312-442" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/validator.py#L312-L442" />
+
+### Local vs External Score Sources
+
+The system handles both local Proof-of-GPU results and external score data from other validators:
+
+| Score Source | Priority | Indicator | Data Source |
+|--------------|----------|-----------|-------------|
+| Local PoG Results | High | `own_score: True` | Local `pog_stats` table |
+| External Validator Data | Low | `own_score: False` | WandB `stats_allocated` |
+| Penalized Miners | Override | `score: 0` | WandB penalized list |
+| Non-queryable Miners | Override | `score: 0` | Filtered queryable set |
+
+Sources: <SourceLink text="neurons/validator.py:360-382" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/validator.py#L360-L382" />
+
+## Weight Setting and Network Integration
+
+The scoring system converts calculated scores into network weights that determine miner rewards in the Bittensor incentive mechanism.
+
+```mermaid
+flowchart TD
+    subgraph "Score Processing"
+        SCORES["self.scores<br/>PyTorch Tensor"]
+        CLAMP["scores[scores < 0] = 0<br/>Remove Negatives"]
+        NORMALIZE["torch.nn.functional.normalize<br/>p=1.0, dim=0"]
+    end
+    
+    subgraph "Weight Setting"
+        WEIGHTS["Normalized Weights<br/>Sum = 1.0"]
+        SUBTENSOR["subtensor.set_weights()"]
+        BLOCKCHAIN["Bittensor Blockchain<br/>Network State"]
+    end
+    
+    subgraph "Alternative: Burn Weights"
+        BURN_UID["get_burn_uid()<br/>Subnet Owner UID"]
+        BURN_WEIGHT["Single Weight = 1.0<br/>100% to Burn Account"]
+        BURN_SET["set_burn_weights()"]
+    end
+    
+    SCORES --> CLAMP
+    CLAMP --> NORMALIZE
+    NORMALIZE --> WEIGHTS
+    WEIGHTS --> SUBTENSOR
+    SUBTENSOR --> BLOCKCHAIN
+    
+    BURN_UID --> BURN_WEIGHT
+    BURN_WEIGHT --> BURN_SET
+    BURN_SET --> BLOCKCHAIN
+```
+
+**Weight Setting Architecture**
+The system converts scores to blockchain weights through normalization and clamping operations.
+
+### Weight Setting Process
+
+The validator implements two weight setting strategies:
+
+1. **Standard Weight Setting** (`set_weights`):
+   - Clamps negative scores to zero
+   - L1-normalizes scores to sum to 1.0
+   - Distributes weights across all miners
+
+2. **Burn Weight Setting** (`set_burn_weights`):
+   - Assigns 100% weight to subnet owner (burn account)
+   - Used as alternative to standard distribution
+
+Sources: <SourceLink text="neurons/validator.py:1132-1154" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/validator.py#L1132-L1154" />, <SourceLink text="neurons/validator.py:1101-1131" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/validator.py#L1101-L1131" />
+
+### Weight Update Schedule
+
+Weights are updated periodically based on the `weights_rate_limit` configuration:
+
+| Event | Block Interval | Description |
+|-------|----------------|-------------|
+| Weight Setting | `weights_rate_limit` | Update network weights |
+| Score Sync | Every weight update | Recalculate all scores |
+| Block Tracking | Continuous | Prevent duplicate operations |
+
+The validator tracks the last update block and ensures weights are only set once per interval to comply with network rate limits.
+
+Sources: <SourceLink text="neurons/validator.py:1240-1247" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/validator.py#L1240-L1247" />
+
+## Score Statistics and Monitoring
+
+The system provides comprehensive statistics and monitoring for score calculation and distribution across the network.
+
+```mermaid
+graph TD
+    subgraph "Statistics Collection"
+        STATS_DICT["self.stats Dictionary<br/>Per-UID Statistics"]
+        MINER_DETAILS["Miner Details<br/>{hotkey, allocated, score, gpu_specs}"]
+        RELIABILITY["reliability_score<br/>Historical Performance"]
+    end
+    
+    subgraph "Monitoring Output"
+        LOG_SUMMARY["Miner Stats Summary<br/>Formatted Log Output"]
+        WANDB_METRICS["WandB Metrics<br/>Chain Data Logging"]
+        ALLOCATION_SYNC["Allocation Synchronization<br/>update_allocation_wandb()"]
+    end
+    
+    subgraph "Score Distribution Analysis"
+        GPU_PARSING["GPU Spec Display<br/>num_gpus x gpu_name"]
+        SCORE_FORMAT["Score Formatting<br/>2 decimal places"]
+        SOURCE_TRACKING["Source Identification<br/>Local vs External"]
+    end
+    
+    STATS_DICT --> MINER_DETAILS
+    MINER_DETAILS --> LOG_SUMMARY
+    MINER_DETAILS --> GPU_PARSING
+    MINER_DETAILS --> SCORE_FORMAT
+    
+    LOG_SUMMARY --> MONITORING_OUTPUT
+    WANDB_METRICS --> MONITORING_OUTPUT
+    ALLOCATION_SYNC --> MONITORING_OUTPUT
+```
+
+**Statistics and Monitoring Pipeline**
+The system provides detailed visibility into score calculation and distribution across miners.
+
+### Statistics Structure
+
+Each miner's statistics include comprehensive performance and allocation data:
+
+```python
+self.stats[uid] = {
+    "hotkey": hotkey,
+    "allocated": hotkey in allocated_hotkeys,
+    "own_score": bool,  # True if local PoG, False if external
+    "score": calculated_score * 100,  # Scaled to 0-100
+    "gpu_specs": gpu_specifications,
+    "reliability_score": historical_performance
+}
+```
+
+The system outputs formatted statistics showing miner performance across the network with fixed-width columns for easy reading.
+
+Sources: <SourceLink text="neurons/validator.py:406-442" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/validator.py#L406-L442" />

@@ -1,0 +1,368 @@
+---
+
+title: "Validator System"
+
+---
+
+
+
+import CollapsibleAside from '@components/CollapsibleAside.astro';
+
+import SourceLink from '@components/SourceLink.astro';
+
+
+
+<CollapsibleAside title="Relevant Source Files">
+
+  <SourceLink text="neurons/validator.py" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/validator.py" />
+
+</CollapsibleAside>
+
+
+
+
+
+
+
+
+The Validator System is the core component responsible for evaluating miner capabilities, performing proof-of-GPU validation, and setting network weights in the NI Compute Subnet. It orchestrates the entire validation process including hardware verification, performance scoring, and blockchain weight updates.
+
+For information about the specific proof-of-GPU validation algorithms, see [Proof of GPU](/validator-system/proof-of-gpu#2.1). For details about the scoring mechanisms, see [Scoring System](/validator-system/scoring-system#2.2). For database schema and operations, see [Database Operations](/validator-system/database-operations#2.3).
+
+## Architecture Overview
+
+The validator system operates as a continuous validation loop that queries miners, validates their GPU capabilities, calculates performance scores, and updates network weights. The system is built around the `Validator` class which coordinates all validation activities.
+
+### Validator System Components
+
+```mermaid
+graph TB
+    subgraph "Validator Core"
+        ValidatorClass["Validator Class<br/>neurons/validator.py"]
+        Config["Configuration<br/>init_config()"]
+        Prometheus["Prometheus Setup<br/>init_prometheus()"]
+    end
+    
+    subgraph "Blockchain Interface"
+        Subtensor["ComputeSubnetSubtensor<br/>subtensor connection"]
+        Metagraph["bt.metagraph<br/>network state"]
+        Wallet["bt.wallet<br/>validator identity"]
+    end
+    
+    subgraph "Data Layer"
+        ComputeDb["ComputeDb<br/>local database"]
+        ComputeWandb["ComputeWandb<br/>metrics & monitoring"]
+        ConfigData["config.yaml<br/>GPU performance data"]
+    end
+    
+    subgraph "Validation Engine"
+        PoGEngine["proof_of_gpu()<br/>GPU validation"]
+        ScoringEngine["sync_scores()<br/>performance scoring"]
+        WeightSetter["set_weights()<br/>blockchain updates"]
+    end
+    
+    subgraph "Miner Communication"
+        AllocateProtocol["Allocate Protocol<br/>resource allocation"]
+        SpecsProtocol["Specs Protocol<br/>hardware queries"]
+        ChallengeProtocol["Challenge Protocol<br/>PoW verification"]
+    end
+    
+    ValidatorClass --> Config
+    ValidatorClass --> Prometheus
+    ValidatorClass --> Subtensor
+    ValidatorClass --> Metagraph
+    ValidatorClass --> Wallet
+    ValidatorClass --> ComputeDb
+    ValidatorClass --> ComputeWandb
+    ValidatorClass --> ConfigData
+    
+    ValidatorClass --> PoGEngine
+    ValidatorClass --> ScoringEngine
+    ValidatorClass --> WeightSetter
+    
+    PoGEngine --> AllocateProtocol
+    ValidatorClass --> SpecsProtocol
+    ValidatorClass --> ChallengeProtocol
+    
+    ScoringEngine --> ComputeDb
+    ScoringEngine --> ComputeWandb
+    WeightSetter --> Subtensor
+```
+
+Sources: <SourceLink text="neurons/validator.py:70-209" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/validator.py#L70-L209" />, <SourceLink text="neurons/validator.py:130-175" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/validator.py#L130-L175" />
+
+### Validation Process Flow
+
+```mermaid
+sequenceDiagram
+    participant V as "Validator"
+    participant DB as "ComputeDb"
+    participant W as "ComputeWandb"
+    participant BT as "Subtensor"
+    participant M as "Miner"
+    
+    Note over V: Initialization Phase
+    V->>DB: Initialize database connection
+    V->>W: Setup WandB monitoring
+    V->>BT: Connect to blockchain
+    V->>V: init_scores()
+    
+    Note over V: Main Validation Loop
+    loop Every Block
+        V->>BT: sync_local() - Update metagraph
+        V->>V: get_queryable() - Filter valid miners
+        
+        alt Every 360 blocks (PoG)
+            V->>V: proof_of_gpu()
+            V->>M: allocate_miner()
+            V->>M: test_miner_gpu()
+            V->>M: deallocate_miner()
+            V->>DB: update_pog_stats()
+        end
+        
+        alt Every 150 blocks (Specs)
+            V->>W: get_specs_wandb()
+            V->>DB: update_miner_details()
+        end
+        
+        alt Every 25 blocks (Status)
+            V->>V: sync_status()
+            V->>W: log_chain_data()
+        end
+        
+        alt Every 100 blocks (Weights)
+            V->>V: sync_scores()
+            V->>V: set_burn_weights()
+            V->>BT: Submit weights to blockchain
+        end
+    end
+```
+
+Sources: <SourceLink text="neurons/validator.py:1161-1273" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/validator.py#L1161-L1273" />, <SourceLink text="neurons/validator.py:1192-1202" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/validator.py#L1192-L1202" />, <SourceLink text="neurons/validator.py:1240-1247" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/validator.py#L1240-L1247" />
+
+## Core Components
+
+### Validator Class
+
+The `Validator` class is the main orchestrator that manages all validation activities. It maintains state for queryable miners, scores, and validation results.
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `scores` | `torch.Tensor` | Current performance scores for all miners |
+| `stats` | `dict` | Detailed statistics for each miner |
+| `_queryable_uids` | `Dict[int, bt.AxonInfo]` | Valid miners available for validation |
+| `allocated_hotkeys` | `list` | Currently allocated miner hotkeys |
+| `penalized_hotkeys` | `list` | Penalized miner hotkeys |
+
+Sources: <SourceLink text="neurons/validator.py:70-91" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/validator.py#L70-L91" />, <SourceLink text="neurons/validator.py:84-91" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/validator.py#L84-L91" />
+
+### Configuration Management
+
+The validator uses multiple configuration sources to manage validation parameters:
+
+```mermaid
+graph LR
+    subgraph "Configuration Sources"
+        ArgParser["ComputeArgPaser<br/>CLI arguments"]
+        ConfigYaml["config.yaml<br/>GPU performance data"]
+        EnvVars["Environment Variables<br/>system settings"]
+    end
+    
+    subgraph "Configuration Properties"
+        BatchSize["validator_specs_batch_size<br/>validator_challenge_batch_size"]
+        HardwareQuery["validator_perform_hardware_query"]
+        Thresholds["validator_whitelist_updated_threshold"]
+        Blacklists["blacklist_hotkeys<br/>blacklist_coldkeys"]
+    end
+    
+    ArgParser --> BatchSize
+    ArgParser --> HardwareQuery
+    ArgParser --> Thresholds
+    ArgParser --> Blacklists
+    ConfigYaml --> BatchSize
+    EnvVars --> HardwareQuery
+```
+
+Sources: <SourceLink text="neurons/validator.py:210-235" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/validator.py#L210-L235" />, <SourceLink text="neurons/validator.py:132-147" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/validator.py#L132-L147" />
+
+### Queryable Miners Management
+
+The validator maintains a filtered list of queryable miners based on multiple criteria:
+
+```mermaid
+graph TD
+    AllMiners["All Network Miners<br/>metagraph.neurons"]
+    
+    subgraph "Filtering Pipeline"
+        ValidTensors["get_valid_tensors()<br/>IP & blacklist filter"]
+        FilterAxons["filter_axons()<br/>unique IP addresses"]
+        FilterVersion["filter_axon_version()<br/>minimum version check"]
+    end
+    
+    QueryableMiners["_queryable_uids<br/>Dict[int, bt.AxonInfo]"]
+    
+    AllMiners --> ValidTensors
+    ValidTensors --> FilterAxons
+    FilterAxons --> FilterVersion
+    FilterVersion --> QueryableMiners
+    
+    subgraph "Blacklist Checks"
+        BlacklistColdkeys["blacklist_coldkeys"]
+        BlacklistHotkeys["blacklist_hotkeys"]
+        ExploiterKeys["exploiters_hotkeys<br/>exploiters_coldkeys"]
+    end
+    
+    ValidTensors --> BlacklistColdkeys
+    ValidTensors --> BlacklistHotkeys
+    ValidTensors --> ExploiterKeys
+```
+
+Sources: <SourceLink text="neurons/validator.py:571-579" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/validator.py#L571-L579" />, <SourceLink text="neurons/validator.py:487-515" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/validator.py#L487-L515" />, <SourceLink text="neurons/validator.py:517-544" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/validator.py#L517-L544" />
+
+## Validation Process
+
+### Proof-of-GPU Validation
+
+The proof-of-GPU system allocates miners, tests their GPU capabilities, and verifies performance through cryptographic proofs:
+
+```mermaid
+graph TD
+    subgraph "PoG Initialization"
+        GetQueryable["get_queryable()<br/>filter available miners"]
+        GetAllocated["wandb.get_allocated_hotkeys()<br/>skip allocated miners"]
+        CreateQueue["asyncio.Queue<br/>miner processing queue"]
+    end
+    
+    subgraph "Miner Testing Pipeline"
+        AllocateMiner["allocate_miner()<br/>RSA key generation"]
+        SSHConnect["paramiko.SSHClient<br/>secure connection"]
+        HashCheck["compute_script_hash()<br/>integrity verification"]
+        GPUInfo["get_remote_gpu_info()<br/>nvidia-smi query"]
+        Benchmark["execute_script_on_miner('benchmark')<br/>performance test"]
+        MerkleProof["execute_script_on_miner('compute')<br/>cryptographic proof"]
+        VerifyProof["verify_responses()<br/>proof validation"]
+    end
+    
+    subgraph "Result Processing"
+        UpdatePoGStats["update_pog_stats()<br/>database update"]
+        SyncScores["sync_scores()<br/>recalculate scores"]
+    end
+    
+    GetQueryable --> GetAllocated
+    GetAllocated --> CreateQueue
+    CreateQueue --> AllocateMiner
+    AllocateMiner --> SSHConnect
+    SSHConnect --> HashCheck
+    HashCheck --> GPUInfo
+    GPUInfo --> Benchmark
+    Benchmark --> MerkleProof
+    MerkleProof --> VerifyProof
+    VerifyProof --> UpdatePoGStats
+    UpdatePoGStats --> SyncScores
+```
+
+Sources: <SourceLink text="neurons/validator.py:663-787" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/validator.py#L663-L787" />, <SourceLink text="neurons/validator.py:799-948" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/validator.py#L799-L948" />
+
+### Scoring System
+
+The scoring system calculates performance scores based on GPU specifications and reliability metrics:
+
+```mermaid
+graph LR
+    subgraph "Score Calculation"
+        PoGSpecs["get_pog_specs()<br/>local GPU data"]
+        CalcScore["calc_score_pog()<br/>performance calculation"]
+        StatsAllocated["stats_allocated<br/>external scores"]
+        PenalizedCheck["penalized_hotkeys<br/>penalty filter"]
+    end
+    
+    subgraph "Score Sources"
+        LocalDB["Local Database<br/>own_score: true"]
+        ExternalWandb["WandB Stats<br/>own_score: false"]
+    end
+    
+    subgraph "Final Score"
+        FinalScore["stats[uid]['score']<br/>final miner score"]
+        ReliabilityScore["reliability_score<br/>historical performance"]
+    end
+    
+    PoGSpecs --> CalcScore
+    CalcScore --> LocalDB
+    StatsAllocated --> ExternalWandb
+    LocalDB --> FinalScore
+    ExternalWandb --> FinalScore
+    PenalizedCheck --> FinalScore
+    FinalScore --> ReliabilityScore
+```
+
+Sources: <SourceLink text="neurons/validator.py:312-402" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/validator.py#L312-L402" />, <SourceLink text="neurons/validator.py:360-386" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/validator.py#L360-L386" />
+
+## Database Operations
+
+The validator uses `ComputeDb` for persistent storage of miner information, validation results, and statistics:
+
+| Table | Purpose | Key Operations |
+|-------|---------|----------------|
+| `miners` | Miner registration data | `select_miners()`, `update_miners()`, `purge_miner_entries()` |
+| `pog_stats` | Proof-of-GPU results | `get_pog_specs()`, `update_pog_stats()` |
+| `stats` | Performance statistics | `retrieve_stats()`, `write_stats()` |
+| `allocation` | Resource allocations | `update_miner_details()`, `get_miner_details()` |
+
+Sources: <SourceLink text="neurons/validator.py:171-172" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/validator.py#L171-L172" />, <SourceLink text="compute/utils/db.py" href="https://github.com/neuralinternet/SN27/blob/6261c454/compute/utils/db.py" />
+
+## Monitoring and Metrics
+
+### WandB Integration
+
+The validator integrates with Weights & Biases for distributed state management and metrics collection:
+
+```mermaid
+graph TD
+    subgraph "WandB Operations"
+        AllocatedHotkeys["update_allocated_hotkeys()<br/>track resource usage"]
+        MinerSpecs["get_miner_specs()<br/>hardware specifications"]
+        ChainData["log_chain_data()<br/>blockchain metrics"]
+        PenalizedHotkeys["get_penalized_hotkeys_checklist_bak()"]
+    end
+    
+    subgraph "Metrics Collection"
+        BlockData["Block, Stake, Rank<br/>vTrust, Emission"]
+        ValidatorStats["Validator performance<br/>validation results"]
+        MinerStats["Miner capabilities<br/>GPU specifications"]
+    end
+    
+    AllocatedHotkeys --> MinerStats
+    MinerSpecs --> MinerStats
+    ChainData --> BlockData
+    PenalizedHotkeys --> ValidatorStats
+```
+
+Sources: <SourceLink text="neurons/validator.py:290-311" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/validator.py#L290-L311" />, <SourceLink text="neurons/validator.py:594-661" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/validator.py#L594-L661" />, <SourceLink text="neurons/validator.py:1229-1237" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/validator.py#L1229-L1237" />
+
+### Weight Setting
+
+The validator periodically updates network weights based on calculated scores:
+
+```mermaid
+graph LR
+    subgraph "Weight Calculation"
+        Scores["self.scores<br/>miner performance"]
+        ClampNegative["scores[scores < 0] = 0<br/>remove negative scores"]
+        Normalize["torch.nn.functional.normalize()<br/>L1 normalization"]
+    end
+    
+    subgraph "Weight Submission"
+        SetWeights["subtensor.set_weights()<br/>blockchain submission"]
+        BurnWeights["set_burn_weights()<br/>burn account allocation"]
+        VersionKey["version_key<br/>__version_as_int__"]
+    end
+    
+    Scores --> ClampNegative
+    ClampNegative --> Normalize
+    Normalize --> SetWeights
+    Normalize --> BurnWeights
+    SetWeights --> VersionKey
+    BurnWeights --> VersionKey
+```
+
+Sources: <SourceLink text="neurons/validator.py:1132-1153" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/validator.py#L1132-L1153" />, <SourceLink text="neurons/validator.py:1101-1131" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/validator.py#L1101-L1131" />

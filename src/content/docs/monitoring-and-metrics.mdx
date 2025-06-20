@@ -1,0 +1,428 @@
+---
+
+title: "Monitoring and Metrics"
+
+---
+
+
+
+import CollapsibleAside from '@components/CollapsibleAside.astro';
+
+import SourceLink from '@components/SourceLink.astro';
+
+
+
+<CollapsibleAside title="Relevant Source Files">
+
+  <SourceLink text="compute/axon.py" href="https://github.com/neuralinternet/SN27/blob/6261c454/compute/axon.py" />
+
+  <SourceLink text="compute/wandb/wandb.py" href="https://github.com/neuralinternet/SN27/blob/6261c454/compute/wandb/wandb.py" />
+
+</CollapsibleAside>
+
+
+
+
+
+
+
+
+This document covers the monitoring and observability infrastructure used in the NI Compute Subnet. The system employs two primary monitoring solutions: Weights & Biases (WandB) for distributed state management and experiment tracking, and Prometheus for network observability metrics.
+
+For information about the database operations used for local state persistence, see [Database Operations](/validator-system/database-operations#2.3). For details about the communication protocols that generate monitored events, see [Communication Protocols](/communication-protocols#5).
+
+## Architecture Overview
+
+The monitoring system operates across three main components: validators, miners, and the resource allocation API. WandB serves as the primary distributed state store, while Prometheus provides real-time metrics collection.
+
+### Monitoring Architecture
+
+```mermaid
+graph TB
+    subgraph "Validator Instances"
+        VAL1["Validator Process<br/>neurons/validator.py"]
+        VAL2["Validator Process<br/>neurons/validator.py"]
+        VAL3["Validator Process<br/>neurons/validator.py"]
+    end
+    
+    subgraph "Miner Instances"
+        MIN1["Miner Process<br/>neurons/miner.py"]
+        MIN2["Miner Process<br/>neurons/miner.py"]
+        MIN3["Miner Process<br/>neurons/miner.py"]
+    end
+    
+    subgraph "WandB Cloud Service"
+        WANDB_PROJECT["opencompute Project<br/>neuralinternet/opencompute"]
+        WANDB_RUNS["Individual Runs<br/>validator-{hotkey}<br/>miner-{hotkey}"]
+        WANDB_CONFIG["Run Configurations<br/>Hardware Specs<br/>Allocation State<br/>Performance Stats"]
+    end
+    
+    subgraph "Prometheus Infrastructure"
+        PROM_AXON["ComputeSubnetAxon<br/>Prometheus Endpoints"]
+        PROM_METRICS["Network Metrics<br/>Performance Data"]
+        PROM_EXTRINSIC["prometheus_extrinsic<br/>Blockchain Integration"]
+    end
+    
+    subgraph "Local State"
+        COMPUTE_DB["ComputeDb<br/>SQLite Database"]
+        WANDB_RUNS_TABLE["wandb_runs table<br/>hotkey -> run_id mapping"]
+    end
+    
+    VAL1 --> WANDB_PROJECT
+    VAL2 --> WANDB_PROJECT
+    VAL3 --> WANDB_PROJECT
+    MIN1 --> WANDB_PROJECT
+    MIN2 --> WANDB_PROJECT
+    MIN3 --> WANDB_PROJECT
+    
+    WANDB_PROJECT --> WANDB_RUNS
+    WANDB_RUNS --> WANDB_CONFIG
+    
+    VAL1 --> PROM_AXON
+    MIN1 --> PROM_AXON
+    PROM_AXON --> PROM_METRICS
+    PROM_AXON --> PROM_EXTRINSIC
+    
+    VAL1 --> COMPUTE_DB
+    MIN1 --> COMPUTE_DB
+    COMPUTE_DB --> WANDB_RUNS_TABLE
+```
+
+**Sources:** <SourceLink text="compute/wandb/wandb.py:1-648" href="https://github.com/neuralinternet/SN27/blob/6261c454/compute/wandb/wandb.py#L1-L648" />, <SourceLink text="compute/axon.py:152-284" href="https://github.com/neuralinternet/SN27/blob/6261c454/compute/axon.py#L152-L284" />
+
+## WandB Integration
+
+The `ComputeWandb` class provides the core monitoring infrastructure, managing distributed state across the network through individual WandB runs for each validator and miner.
+
+### WandB System Components
+
+```mermaid
+graph TD
+    subgraph "ComputeWandb Class"
+        INIT["__init__<br/>Run Initialization"]
+        CONFIG["update_config<br/>Configuration Management"]
+        SIGN["sign_run<br/>Cryptographic Signing"]
+        VERIFY["verify_run<br/>Signature Verification"]
+    end
+    
+    subgraph "Validator Operations"
+        UPDATE_STATS["update_stats<br/>Challenge Results"]
+        UPDATE_ALLOC["update_allocated_hotkeys<br/>Resource Allocation State"]
+        UPDATE_PEN["update_penalized_hotkeys<br/>Blacklist Management"]
+        GET_STATS["get_stats_allocated<br/>Cross-Validator Aggregation"]
+    end
+    
+    subgraph "Miner Operations"
+        UPDATE_SPECS["update_specs<br/>Hardware Specifications"]
+        UPDATE_MINER_ALLOC["update_allocated<br/>Allocation Status"]
+        UPDATE_PORT["update_miner_port_open<br/>Network Accessibility"]
+        SYNC_ALLOC["sync_allocated<br/>State Synchronization"]
+    end
+    
+    subgraph "Data Retrieval"
+        GET_ALLOC["get_allocated_hotkeys<br/>Active Allocations"]
+        GET_PEN["get_penalized_hotkeys<br/>Blacklisted Keys"]
+        GET_SPECS["get_miner_specs<br/>Hardware Information"]
+    end
+    
+    subgraph "WandB API Layer"
+        API_INSTANCE["wandb.Api<br/>API Client"]
+        PROJECT_REF["api.project<br/>opencompute"]
+        RUNS_QUERY["api.runs<br/>Query Interface"]
+    end
+    
+    INIT --> CONFIG
+    CONFIG --> SIGN
+    UPDATE_STATS --> SIGN
+    UPDATE_ALLOC --> SIGN
+    UPDATE_PEN --> SIGN
+    UPDATE_SPECS --> SIGN
+    UPDATE_MINER_ALLOC --> SIGN
+    UPDATE_PORT --> SIGN
+    
+    GET_STATS --> VERIFY
+    GET_ALLOC --> VERIFY
+    GET_PEN --> VERIFY
+    GET_SPECS --> VERIFY
+    
+    API_INSTANCE --> PROJECT_REF
+    PROJECT_REF --> RUNS_QUERY
+    RUNS_QUERY --> GET_STATS
+    RUNS_QUERY --> GET_ALLOC
+    RUNS_QUERY --> GET_PEN
+    RUNS_QUERY --> GET_SPECS
+```
+
+**Sources:** <SourceLink text="compute/wandb/wandb.py:19-648" href="https://github.com/neuralinternet/SN27/blob/6261c454/compute/wandb/wandb.py#L19-L648" />
+
+### Run Management and Initialization
+
+Each network participant creates a WandB run with a standardized naming convention: `{role}-{hotkey}`. The system handles run persistence through local database storage and automatic recovery.
+
+| Component | Description | Key Methods |
+|-----------|-------------|-------------|
+| Run Initialization | Creates or resumes WandB runs | `__init__`, `save_run_id`, `get_run_id` |
+| Configuration Management | Updates run configuration with network state | `update_config` |
+| State Persistence | Stores run IDs in local SQLite database | Database operations in `wandb_runs` table |
+
+**Sources:** <SourceLink text="compute/wandb/wandb.py:52-88" href="https://github.com/neuralinternet/SN27/blob/6261c454/compute/wandb/wandb.py#L52-L88" />, <SourceLink text="compute/wandb/wandb.py:109-138" href="https://github.com/neuralinternet/SN27/blob/6261c454/compute/wandb/wandb.py#L109-L138" />
+
+### Hardware Specifications Tracking
+
+Miners upload hardware specifications to enable validators to make informed allocation decisions. The `update_specs` method integrates with the performance measurement system to provide encrypted hardware details.
+
+```mermaid
+graph LR
+    subgraph "Hardware Detection"
+        PERF_INFO["get_perf_info<br/>neurons/Validator/script.py"]
+        GPU_SPECS["GPU Specifications<br/>Name, Count, Memory"]
+        CPU_SPECS["CPU Specifications<br/>Cores, Architecture"]
+    end
+    
+    subgraph "WandB Upload"
+        UPDATE_SPECS["update_specs<br/>compute/wandb/wandb.py"]
+        RUN_CONFIG["run.config<br/>specs field"]
+        SIGNATURE["sign_run<br/>Cryptographic Verification"]
+    end
+    
+    subgraph "Validator Consumption"
+        GET_MINER_SPECS["get_miner_specs<br/>Query Interface"]
+        QUERYABLE_UIDS["queryable_uids<br/>Network Participants"]
+        ALLOCATION_LOGIC["Resource Allocation<br/>Decision Making"]
+    end
+    
+    PERF_INFO --> GPU_SPECS
+    PERF_INFO --> CPU_SPECS
+    GPU_SPECS --> UPDATE_SPECS
+    CPU_SPECS --> UPDATE_SPECS
+    UPDATE_SPECS --> RUN_CONFIG
+    RUN_CONFIG --> SIGNATURE
+    
+    GET_MINER_SPECS --> QUERYABLE_UIDS
+    QUERYABLE_UIDS --> ALLOCATION_LOGIC
+```
+
+**Sources:** <SourceLink text="compute/wandb/wandb.py:140-159" href="https://github.com/neuralinternet/SN27/blob/6261c454/compute/wandb/wandb.py#L140-L159" />, <SourceLink text="compute/wandb/wandb.py:540-574" href="https://github.com/neuralinternet/SN27/blob/6261c454/compute/wandb/wandb.py#L540-L574" />
+
+## State Management and Synchronization
+
+The WandB system maintains several critical state categories across the network, with built-in aggregation and conflict resolution mechanisms.
+
+### Allocation State Management
+
+```mermaid
+graph TB
+    subgraph "Validator State Updates"
+        ALLOC_UPDATE["update_allocated_hotkeys<br/>List of Allocated Keys"]
+        STATS_UPDATE["update_stats<br/>Performance Statistics"]
+        PEN_UPDATE["update_penalized_hotkeys<br/>Blacklist Management"]
+    end
+    
+    subgraph "Cross-Validator Aggregation"
+        GET_ALLOC_HOTKEYS["get_allocated_hotkeys<br/>Aggregate Across Validators"]
+        GET_STATS_ALLOC["get_stats_allocated<br/>Statistics Aggregation"]
+        CONFLICT_RESOLUTION["pick_dominant_dict<br/>Score-Based Resolution"]
+    end
+    
+    subgraph "Database Synchronization"
+        RETRIEVE_STATS["retrieve_stats<br/>neurons/Validator/database/pog.py"]
+        WRITE_STATS["write_stats<br/>neurons/Validator/database/pog.py"]
+        COMPUTE_DB["ComputeDb<br/>Local State Storage"]
+    end
+    
+    subgraph "Verification Layer"
+        VERIFY_RUN["verify_run<br/>Signature Verification"]
+        VALID_VALIDATORS["valid_validator_hotkeys<br/>Authorized Validators"]
+        SIGNATURE_CHECK["Cryptographic Validation"]
+    end
+    
+    ALLOC_UPDATE --> GET_ALLOC_HOTKEYS
+    STATS_UPDATE --> GET_STATS_ALLOC
+    PEN_UPDATE --> GET_ALLOC_HOTKEYS
+    
+    GET_STATS_ALLOC --> CONFLICT_RESOLUTION
+    CONFLICT_RESOLUTION --> RETRIEVE_STATS
+    RETRIEVE_STATS --> WRITE_STATS
+    WRITE_STATS --> COMPUTE_DB
+    
+    GET_ALLOC_HOTKEYS --> VERIFY_RUN
+    GET_STATS_ALLOC --> VERIFY_RUN
+    VERIFY_RUN --> VALID_VALIDATORS
+    VALID_VALIDATORS --> SIGNATURE_CHECK
+```
+
+**Sources:** <SourceLink text="compute/wandb/wandb.py:198-250" href="https://github.com/neuralinternet/SN27/blob/6261c454/compute/wandb/wandb.py#L198-L250" />, <SourceLink text="compute/wandb/wandb.py:291-333" href="https://github.com/neuralinternet/SN27/blob/6261c454/compute/wandb/wandb.py#L291-L333" />, <SourceLink text="compute/wandb/wandb.py:334-450" href="https://github.com/neuralinternet/SN27/blob/6261c454/compute/wandb/wandb.py#L334-L450" />
+
+### Statistics Aggregation Algorithm
+
+The `get_stats_allocated` method implements a sophisticated aggregation algorithm that resolves conflicts between multiple validator reports for the same miner UID.
+
+| Step | Process | Implementation |
+|------|---------|----------------|
+| 1. Collection | Query all validator runs with stats | WandB API filters |
+| 2. Verification | Validate cryptographic signatures | `verify_run` method |
+| 3. Filtering | Select entries with `own_score=True` and `allocated=True` | Boolean filtering |
+| 4. Aggregation | Group by UID, collect multiple reports | Dictionary aggregation |
+| 5. Resolution | Use `pick_dominant_dict` for conflict resolution | Counter-based selection |
+| 6. Scoring | Prefer highest score in case of ties | Score comparison |
+
+**Sources:** <SourceLink text="compute/wandb/wandb.py:334-450" href="https://github.com/neuralinternet/SN27/blob/6261c454/compute/wandb/wandb.py#L334-L450" />, <SourceLink text="compute/wandb/wandb.py:391-426" href="https://github.com/neuralinternet/SN27/blob/6261c454/compute/wandb/wandb.py#L391-L426" />
+
+## Security and Verification
+
+The monitoring system implements cryptographic verification to ensure data integrity and prevent tampering.
+
+### Signature Verification Process
+
+```mermaid
+graph TD
+    subgraph "Signing Process"
+        RUN_ID["run.id<br/>WandB Run Identifier"]
+        DATA_HASH["SHA-256 Hash<br/>Computed from run_id"]
+        WALLET_SIGN["wallet.hotkey.sign<br/>Cryptographic Signature"]
+        CONFIG_UPDATE["run.config.update<br/>Store Signature"]
+    end
+    
+    subgraph "Verification Process"
+        EXTRACT_SIG["Extract Signature<br/>From run.config"]
+        RECREATE_HASH["Recreate Hash<br/>From run_id"]
+        KEYPAIR_VERIFY["bt.Keypair.verify<br/>Signature Validation"]
+        RESULT["Verification Result<br/>Boolean"]
+    end
+    
+    subgraph "Security Enforcement"
+        VALID_HOTKEYS["valid_validator_hotkeys<br/>Authorized Keys"]
+        ACCESS_CONTROL["Data Access Control<br/>Based on Verification"]
+        FLAG_PARAM["flag Parameter<br/>Enforcement Toggle"]
+    end
+    
+    RUN_ID --> DATA_HASH
+    DATA_HASH --> WALLET_SIGN
+    WALLET_SIGN --> CONFIG_UPDATE
+    
+    EXTRACT_SIG --> RECREATE_HASH
+    RECREATE_HASH --> KEYPAIR_VERIFY
+    KEYPAIR_VERIFY --> RESULT
+    
+    RESULT --> ACCESS_CONTROL
+    VALID_HOTKEYS --> ACCESS_CONTROL
+    FLAG_PARAM --> ACCESS_CONTROL
+```
+
+**Sources:** <SourceLink text="compute/wandb/wandb.py:576-591" href="https://github.com/neuralinternet/SN27/blob/6261c454/compute/wandb/wandb.py#L576-L591" />, <SourceLink text="compute/wandb/wandb.py:592-616" href="https://github.com/neuralinternet/SN27/blob/6261c454/compute/wandb/wandb.py#L592-L616" />
+
+## Prometheus Integration
+
+The Prometheus integration provides real-time metrics collection through custom Axon and Subtensor implementations.
+
+### Prometheus Architecture
+
+```mermaid
+graph LR
+    subgraph "Custom Implementations"
+        COMPUTE_SUBTENSOR["ComputeSubnetSubtensor<br/>compute/axon.py"]
+        SERVE_PROMETHEUS["serve_prometheus<br/>Method"]
+        DO_SERVE["do_serve_prometheus<br/>Extrinsic Handler"]
+    end
+    
+    subgraph "Blockchain Integration"
+        PROMETHEUS_EXTRINSIC["prometheus_extrinsic<br/>compute/prometheus.py"]
+        SUBSTRATE_CALL["substrate.compose_call<br/>SubtensorModule"]
+        SIGNED_EXTRINSIC["create_signed_extrinsic<br/>Blockchain Transaction"]
+    end
+    
+    subgraph "Network Deployment"
+        AXON_SERVE["Custom Axon<br/>ComputeSubnetAxon"]
+        METRICS_ENDPOINT["Prometheus Endpoint<br/>Port Configuration"]
+        NETWORK_REGISTRATION["Blockchain Registration<br/>Network Visibility"]
+    end
+    
+    COMPUTE_SUBTENSOR --> SERVE_PROMETHEUS
+    SERVE_PROMETHEUS --> DO_SERVE
+    DO_SERVE --> PROMETHEUS_EXTRINSIC
+    
+    PROMETHEUS_EXTRINSIC --> SUBSTRATE_CALL
+    SUBSTRATE_CALL --> SIGNED_EXTRINSIC
+    
+    AXON_SERVE --> METRICS_ENDPOINT
+    METRICS_ENDPOINT --> NETWORK_REGISTRATION
+```
+
+**Sources:** <SourceLink text="compute/axon.py:166-201" href="https://github.com/neuralinternet/SN27/blob/6261c454/compute/axon.py#L166-L201" />, <SourceLink text="compute/axon.py:203-283" href="https://github.com/neuralinternet/SN27/blob/6261c454/compute/axon.py#L203-L283" />
+
+### Prometheus Extrinsic Submission
+
+The `serve_prometheus` method submits blockchain extrinsics to register Prometheus endpoints with the network, enabling distributed metrics collection.
+
+| Component | Function | Parameters |
+|-----------|----------|------------|
+| `serve_prometheus` | Main entry point | `wallet`, `port`, `netuid`, `wait_for_inclusion`, `wait_for_finalization` |
+| `do_serve_prometheus` | Extrinsic handler | `call_params`, retry logic with exponential backoff |
+| `prometheus_extrinsic` | Blockchain integration | Custom prometheus integration (imported) |
+
+**Sources:** <SourceLink text="compute/axon.py:166-201" href="https://github.com/neuralinternet/SN27/blob/6261c454/compute/axon.py#L166-L201" />, <SourceLink text="compute/axon.py:203-283" href="https://github.com/neuralinternet/SN27/blob/6261c454/compute/axon.py#L203-L283" />
+
+## Data Flow Integration
+
+The monitoring system integrates with the core subnet operations through several key data flows.
+
+### Validator Monitoring Flow
+
+```mermaid
+graph TD
+    subgraph "Validation Process"
+        POG_VALIDATION["Proof-of-GPU<br/>Validation"]
+        CHALLENGE_RESULTS["Challenge Results<br/>Success/Failure"]
+        SCORING["Score Calculation<br/>Performance Metrics"]
+    end
+    
+    subgraph "Local Storage"
+        COMPUTE_DB_WRITE["ComputeDb Write<br/>Local Statistics"]
+        POG_STATS["pog_stats table<br/>GPU Performance"]
+        STATS_TABLE["stats table<br/>Miner Scores"]
+    end
+    
+    subgraph "WandB Logging"
+        UPDATE_STATS_CALL["update_stats<br/>Aggregate Results"]
+        WANDB_LOG["wandb.log<br/>Time Series Data"]
+        CONFIG_UPDATE_STATS["run.config.update<br/>Latest State"]
+    end
+    
+    subgraph "Cross-Network Sync"
+        ALLOCATED_UPDATE["update_allocated_hotkeys<br/>Resource State"]
+        PENALIZED_UPDATE["update_penalized_hotkeys<br/>Blacklist State"]
+        SIGNATURE_APPLY["sign_run<br/>Cryptographic Proof"]
+    end
+    
+    POG_VALIDATION --> CHALLENGE_RESULTS
+    CHALLENGE_RESULTS --> SCORING
+    SCORING --> COMPUTE_DB_WRITE
+    
+    COMPUTE_DB_WRITE --> POG_STATS
+    COMPUTE_DB_WRITE --> STATS_TABLE
+    
+    SCORING --> UPDATE_STATS_CALL
+    UPDATE_STATS_CALL --> WANDB_LOG
+    WANDB_LOG --> CONFIG_UPDATE_STATS
+    
+    CONFIG_UPDATE_STATS --> ALLOCATED_UPDATE
+    ALLOCATED_UPDATE --> PENALIZED_UPDATE
+    PENALIZED_UPDATE --> SIGNATURE_APPLY
+```
+
+**Sources:** <SourceLink text="compute/wandb/wandb.py:186-196" href="https://github.com/neuralinternet/SN27/blob/6261c454/compute/wandb/wandb.py#L186-L196" />, <SourceLink text="compute/wandb/wandb.py:198-230" href="https://github.com/neuralinternet/SN27/blob/6261c454/compute/wandb/wandb.py#L198-L230" />, <SourceLink text="compute/wandb/wandb.py:232-249" href="https://github.com/neuralinternet/SN27/blob/6261c454/compute/wandb/wandb.py#L232-L249" />
+
+## Configuration and Environment
+
+The monitoring system requires specific configuration for proper operation, including API credentials and network parameters.
+
+### Environment Requirements
+
+| Requirement | Configuration | Source |
+|-------------|---------------|---------|
+| WandB API Key | `WANDB_API_KEY` environment variable or `.netrc` file | Environment setup |
+| Project Configuration | `PUBLIC_WANDB_NAME = "opencompute"` | Hard-coded constant |
+| Entity Configuration | `PUBLIC_WANDB_ENTITY = "neuralinternet"` | Hard-coded constant |
+| Database Connection | `ComputeDb()` instance | Local SQLite database |
+
+**Sources:** <SourceLink text="compute/wandb/wandb.py:15-16" href="https://github.com/neuralinternet/SN27/blob/6261c454/compute/wandb/wandb.py#L15-L16" />, <SourceLink text="compute/wandb/wandb.py:38-45" href="https://github.com/neuralinternet/SN27/blob/6261c454/compute/wandb/wandb.py#L38-L45" />
