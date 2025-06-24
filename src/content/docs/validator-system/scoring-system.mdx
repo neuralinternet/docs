@@ -93,8 +93,8 @@ flowchart LR
     
     subgraph "Score Calculation"
         MAX_CALC["Calculate max_score<br/>max_gpu * 8"]
-        FACTOR["score_factor = 100/max_score"]
-        BASE_SCORE["base_score = gpu_score * num_gpus * factor"]
+        FACTOR["score_factor : 100/max_score"]
+        BASE_SCORE["base_score : gpu_score * num_gpus * factor"]
         ALLOCATION["Allocation Multiplier<br/>1.0 (no bonus)"]
         NORMALIZE["normalize(score, 0, 100)"]
     end
@@ -135,8 +135,8 @@ graph TD
     
     subgraph "Score Processing"
         MAX_GPU["max(gpu_scores.values())"]
-        MAX_SCORE["max_score = max_gpu * 8"]
-        FACTOR["score_factor = 100 / max_score"]
+        MAX_SCORE["max_score : max_gpu * 8"]
+        FACTOR["score_factor : 100 / max_score"]
     end
     
     GPU_PERF --> GPU_SCORES
@@ -218,19 +218,19 @@ The scoring system converts calculated scores into network weights that determin
 flowchart TD
     subgraph "Score Processing"
         SCORES["self.scores<br/>PyTorch Tensor"]
-        CLAMP["scores[scores < 0] = 0<br/>Remove Negatives"]
-        NORMALIZE["torch.nn.functional.normalize<br/>p=1.0, dim=0"]
+        CLAMP["scores[scores < 0] : 0<br/>Remove Negatives"]
+        NORMALIZE["torch.nn.functional.normalize<br/>p:1.0, dim:0"]
     end
     
     subgraph "Weight Setting"
-        WEIGHTS["Normalized Weights<br/>Sum = 1.0"]
+        WEIGHTS["Normalized Weights<br/>Sum : 1.0"]
         SUBTENSOR["subtensor.set_weights()"]
         BLOCKCHAIN["Bittensor Blockchain<br/>Network State"]
     end
     
     subgraph "Alternative: Burn Weights"
         BURN_UID["get_burn_uid()<br/>Subnet Owner UID"]
-        BURN_WEIGHT["Single Weight = 1.0<br/>100% to Burn Account"]
+        BURN_WEIGHT["Single Weight : 1.0<br/>100% to Burn Account"]
         BURN_SET["set_burn_weights()"]
     end
     

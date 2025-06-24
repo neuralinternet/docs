@@ -198,11 +198,11 @@ flowchart TD
     subgraph "GPU Benchmarking Process"
         start["Validator initiates PoG"] --> send["send_script_and_request_hash()"]
         send --> verify["Verify script hash"]
-        verify --> benchmark["execute_script_on_miner(mode='benchmark')"]
+        verify --> benchmark["execute_script_on_miner(mode:'benchmark')"]
         benchmark --> parse["parse_benchmark_output()"]
-        parse --> compute["execute_script_on_miner(mode='compute')"]
+        parse --> compute["execute_script_on_miner(mode:'compute')"]
         compute --> merkle["parse_merkle_output()"]
-        merkle --> proof["execute_script_on_miner(mode='proof')"]
+        merkle --> proof["execute_script_on_miner(mode:'proof')"]
         proof --> validate["verify_responses()"]
         validate --> result["GPU identification & scoring"]
     end
@@ -238,7 +238,7 @@ flowchart TD
         input --> calculate["Calculate combined_scores for all GPU models"]
         calculate --> deviation["fp16_deviation + fp32_deviation + avram_deviation / 3"]
         deviation --> sort["Sort by lowest deviation score"]
-        sort --> identify["identified_gpu = best_match"]
+        sort --> identify["identified_gpu : best_match"]
         identify --> tolerance{"Check tolerance_pairs"}
         tolerance -->|"Match found"| adjust["Apply tolerance adjustment"]
         tolerance -->|"No match"| return["Return identified_gpu"]

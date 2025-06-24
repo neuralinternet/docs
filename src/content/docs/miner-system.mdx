@@ -226,7 +226,7 @@ The `base_blacklist()` method implements comprehensive security controls to prev
 |---|---|---|
 | Whitelist Check | `hotkey not in self.whitelist_hotkeys` | Allow trusted validators regardless of stake |
 | Network Recognition | `hotkey not in self.metagraph.hotkeys` | Reject unregistered entities |
-| Stake Requirement | `stake < validator_permit_stake` | Ensure minimum validator stake |
+| Stake Requirement | `stake &lt; validator_permit_stake` | Ensure minimum validator stake |
 | Explicit Blacklist | `hotkey in self.blacklist_hotkeys` | Block specific problematic validators |
 | Exploiter Detection | `hotkey in self.exploiters_hotkeys_set` | Block known malicious actors |
 
@@ -250,7 +250,7 @@ graph TD
     subgraph "Checking Mode (checking=True)"
         CHECK_POSITIVE["timeline > 0"]
         CHECK_ALLOCATION["check_allocation()"]
-        CHECK_NEGATIVE["timeline = 0"]
+        CHECK_NEGATIVE["timeline : 0"]
         CHECK_IF_ALLOCATED["check_if_allocated()"]
     end
     
@@ -264,7 +264,7 @@ graph TD
     subgraph "Allocation Mode (Normal)"
         ALLOC_POSITIVE["timeline > 0"]
         REGISTER_ALLOCATION["register_allocation()"]
-        ALLOC_NEGATIVE["timeline = 0"] 
+        ALLOC_NEGATIVE["timeline : 0"] 
         DEREGISTER_ALLOCATION["deregister_allocation()"]
     end
     
@@ -316,7 +316,7 @@ graph LR
     end
     
     subgraph "Validation"
-        DIFFICULTY_CHECK["difficulty <= 0"]
+        DIFFICULTY_CHECK["difficulty <: 0"]
         VALIDATOR_ID["dendrite.hotkey[:8]"]
         RUN_ID["run_id generation"]
     end

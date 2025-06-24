@@ -113,7 +113,7 @@ When a miner receives a challenge, it follows these steps:
 5. Hashcat is run on the miner's GPU to attempt to recover the original input from the hash.
 6. Results, including success/failure and execution time, are returned to the validator.
 
-The miner's challenge handler includes validation to prevent invalid challenges (e.g., difficulty <= 0):
+The miner's challenge handler includes validation to prevent invalid challenges (e.g., difficulty &lt;= 0):
 
 ```mermaid
 flowchart TD

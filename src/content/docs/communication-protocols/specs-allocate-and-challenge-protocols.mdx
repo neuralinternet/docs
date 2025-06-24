@@ -150,7 +150,7 @@ The `specs_output` contains detailed hardware information in the following forma
 ```mermaid
 flowchart TD
     A["Validator calls dendrite.query()"] --> B["Specs synapse created"]
-    B --> C["specs_input = ''"]
+    B --> C["specs_input : ''"]
     C --> D["Message sent to miner"]
     D --> E["Miner collects hardware info"]
     E --> F["specs_output populated"]
@@ -214,8 +214,8 @@ flowchart TD
     F --> G["Configure SSH access"]
     G --> H["Return allocation details"]
     
-    E --> I["output = {'available': bool}"]
-    H --> J["output = {'status': 'allocated', 'ssh_details': {...}}"]
+    E --> I["output : {'available': bool}"]
+    H --> J["output : {'status': 'allocated', 'ssh_details': {...}}"]
     
     I --> K["deserialize() returns output"]
     J --> K
@@ -259,8 +259,8 @@ flowchart TD
     C --> D["Synapse sent to miner"]
     D --> E["Miner executes hashcat"]
     E --> F{"Hashcat successful?"}
-    F -->|Yes| G["output = {'password': result, 'error': null}"]
-    F -->|No| H["output = {'password': null, 'error': error_msg}"]
+    F -->|Yes| G["output : {'password': result, 'error': null}"]
+    F -->|No| H["output : {'password': null, 'error': error_msg}"]
     G --> I["Response sent to validator"]
     H --> I
     I --> J["deserialize() returns output"]

@@ -171,7 +171,7 @@ The project uses `pyproject.toml` for modern Python packaging and dependency man
 ```mermaid
 graph TB
     subgraph "Build System"
-        HATCH["hatchling>=1.24.2"]
+        HATCH["hatchling>:1.24.2"]
         BUILD["hatchling.build"]
     end
     
@@ -180,7 +180,7 @@ graph TB
         DESC["NI Compute Subnet"]
         AUTHOR["neuralinternet.ai"]
         LICENSE["MIT"]
-        PYTHON[">=3.10"]
+        PYTHON[">:3.10"]
     end
     
     subgraph "Dependencies"

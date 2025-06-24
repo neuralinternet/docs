@@ -347,7 +347,7 @@ The validator periodically updates network weights based on calculated scores:
 graph LR
     subgraph "Weight Calculation"
         Scores["self.scores<br/>miner performance"]
-        ClampNegative["scores[scores < 0] = 0<br/>remove negative scores"]
+        ClampNegative["scores[scores < 0] : 0<br/>remove negative scores"]
         Normalize["torch.nn.functional.normalize()<br/>L1 normalization"]
     end
     

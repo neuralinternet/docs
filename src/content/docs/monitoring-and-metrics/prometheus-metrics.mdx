@@ -302,10 +302,10 @@ The `do_serve_prometheus()` method implements comprehensive retry logic for reli
 flowchart LR
     subgraph "Retry Configuration"
         RC["@retry decorator"]
-        D["delay=1"]
-        T["tries=3"] 
-        B["backoff=2"]
-        MD["max_delay=4"]
+        D["delay:1"]
+        T["tries:3"] 
+        B["backoff:2"]
+        MD["max_delay:4"]
     end
     
     subgraph "Submission Process"

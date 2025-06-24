@@ -100,47 +100,47 @@ The project relies on a carefully curated set of dependencies that enable blockc
 ```mermaid
 graph TB
     subgraph "Blockchain Layer"
-        BITTENSOR["bittensor==9.0.0"]
-        BTCLI["bittensor-cli==9.1.0"]
-        BTWALLET["bittensor-wallet==3.0.4"]
-        SUBSTRATE["async-substrate-interface==1.0.3"]
+        BITTENSOR["bittensor::9.0.0"]
+        BTCLI["bittensor-cli::9.1.0"]
+        BTWALLET["bittensor-wallet::3.0.4"]
+        SUBSTRATE["async-substrate-interface::1.0.3"]
     end
     
     subgraph "GPU Computing"
-        TORCH["torch==2.5.1"]
+        TORCH["torch::2.5.1"]
         NVIDIA["nvidia-* packages<br/>CUDA Runtime"]
-        GPUTIL["GPUtil==1.4.0"]
-        IGPU["igpu==0.1.2"]
-        PYNVML["pynvml==12.0.0"]
+        GPUTIL["GPUtil::1.4.0"]
+        IGPU["igpu::0.1.2"]
+        PYNVML["pynvml::12.0.0"]
     end
     
     subgraph "Web Services"
-        FASTAPI["fastapi==0.110.3"]
-        UVICORN["uvicorn==0.34.0"]
-        STARLETTE["starlette==0.37.2"]
-        AIOHTTP["aiohttp==3.10.11"]
+        FASTAPI["fastapi::0.110.3"]
+        UVICORN["uvicorn::0.34.0"]
+        STARLETTE["starlette::0.37.2"]
+        AIOHTTP["aiohttp::3.10.11"]
     end
     
     subgraph "Containerization"
-        DOCKER["docker==7.0.0"]
-        PARAMIKO["paramiko==3.4.1"]
+        DOCKER["docker::7.0.0"]
+        PARAMIKO["paramiko::3.4.1"]
     end
     
     subgraph "Monitoring & Logging"
-        WANDB["wandb==0.19.0"]
-        PSUTIL["psutil==5.9.8"]
+        WANDB["wandb::0.19.0"]
+        PSUTIL["psutil::5.9.8"]
     end
     
     subgraph "Cryptography"
-        CRYPTO["cryptography==43.0.1"]
-        BLAKE3["blake3==1.0.4"]
-        PYCRYPTO["pycryptodome==3.21.0"]
+        CRYPTO["cryptography::43.0.1"]
+        BLAKE3["blake3::1.0.4"]
+        PYCRYPTO["pycryptodome::3.21.0"]
     end
     
     subgraph "Data Processing"
-        NUMPY["numpy==2.0.2"]
-        REQUESTS["requests==2.31.0"]
-        MSGPACK["msgpack-numpy-opentensor==0.5.0"]
+        NUMPY["numpy::2.0.2"]
+        REQUESTS["requests::2.31.0"]
+        MSGPACK["msgpack-numpy-opentensor::0.5.0"]
     end
     
     BITTENSOR --> SUBSTRATE
@@ -168,9 +168,9 @@ The project uses modern Python packaging standards with `hatchling` as the build
 
 | Component | Configuration | Purpose |
 |-----------|---------------|---------|
-| **Build Backend** | `hatchling>=1.24.2` | Modern Python build system |
+| **Build Backend** | `hatchling&gt;=1.24.2` | Modern Python build system |
 | **Version Source** | `compute/__init__.py` | Dynamic versioning from package |
-| **Python Requirement** | `>=3.10` | Minimum Python version |
+| **Python Requirement** | `&gt;=3.10` | Minimum Python version |
 | **Package Distribution** | `compute`, `neurons` | Core packages included in wheel |
 | **License** | MIT | Open source license |
 
@@ -223,11 +223,11 @@ The development environment includes comprehensive tooling for code quality, tes
 ```mermaid
 graph TD
     subgraph "Development Dependencies"
-        PRECOMMIT["pre-commit==4.1.0"]
-        PYTEST["pytest==8.3.5"]
-        PYTESTCOV["pytest-cov==6.0.0"]
-        ALLURE["allure-pytest==2.13.5"]
-        PIPTOOLS["pip-tools==7.4.1"]
+        PRECOMMIT["pre-commit::4.1.0"]
+        PYTEST["pytest::8.3.5"]
+        PYTESTCOV["pytest-cov::6.0.0"]
+        ALLURE["allure-pytest::2.13.5"]
+        PIPTOOLS["pip-tools::7.4.1"]
     end
     
     subgraph "Code Quality"
@@ -245,7 +245,7 @@ graph TD
     
     subgraph "Build Tools"
         HATCH["hatchling"]
-        BUILD["build==1.2.2.post1"]
+        BUILD["build::1.2.2.post1"]
         WHEEL_BUILD["Wheel Building"]
     end
     

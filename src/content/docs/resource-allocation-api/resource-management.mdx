@@ -44,7 +44,7 @@ flowchart TD
     CandidateList --> FilterAxons["Filter metagraph.axons"]
     FilterAxons --> AxonCandidates["axon_candidates[]"]
     
-    AxonCandidates --> CheckAvailability["dendrite(Allocate(checking=True))"]
+    AxonCandidates --> CheckAvailability["dendrite(Allocate(checking:True))"]
     CheckAvailability --> ValidateResponses["Validate responses"]
     ValidateResponses --> FinalCandidates["final_candidates_hotkey[]"]
     
@@ -100,10 +100,10 @@ The system implements two primary allocation strategies: specification-based all
 flowchart TD
     AllocateSpec["_allocate_container()"] --> BuildDevReq["Build device_requirement{}"]
     BuildDevReq --> FindCandidates["select_allocate_miners_hotkey()"]
-    FindCandidates --> CheckAvailable["dendrite(checking=True)"]
+    FindCandidates --> CheckAvailable["dendrite(checking:True)"]
     CheckAvailable --> ScoreSort["torch.ones_like(metagraph.S)"]
     ScoreSort --> TryAllocation["Loop through sorted_hotkeys"]
-    TryAllocation --> SendAllocate["dendrite(Allocate(checking=False))"]
+    TryAllocation --> SendAllocate["dendrite(Allocate(checking:False))"]
     SendAllocate --> ValidateResponse["Check response.status"]
     ValidateResponse --> Success["Return allocation info"]
     ValidateResponse --> NextCandidate["Try next candidate"]
@@ -150,10 +150,10 @@ flowchart TD
     CheckTask["_check_allocation()"] --> QueryDB["SELECT * FROM allocation"]
     QueryDB --> LoopAllocations["For each allocation"]
     LoopAllocations --> ValidateHotkey["Check hotkey in metagraph"]
-    ValidateHotkey --> HealthCheck["dendrite_check(Allocate(checking=True))"]
+    ValidateHotkey --> HealthCheck["dendrite_check(Allocate(checking:True))"]
     HealthCheck --> EvaluateResponse["Evaluate response"]
     
-    EvaluateResponse --> Online["response.status == False"]
+    EvaluateResponse --> Online["response.status :: False"]
     EvaluateResponse --> Offline["No response or timeout"]
     
     Online --> NotifyOnline["_notify_allocation_status(ONLINE)"]
@@ -163,7 +163,7 @@ flowchart TD
     Offline --> NotifyOffline["_notify_allocation_status(OFFLINE)"]
     Offline --> CountChecks["checking_allocated.count(hotkey)"]
     
-    CountChecks --> MaxReached["count >= ALLOCATE_CHECK_COUNT"]
+    CountChecks --> MaxReached["count >: ALLOCATE_CHECK_COUNT"]
     MaxReached --> Deallocate["update_allocation_db(False)"]
     Deallocate --> NotifyDealloc["_notify_allocation_status(DEALLOCATION)"]
 ```

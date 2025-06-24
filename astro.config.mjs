@@ -5,7 +5,7 @@ import rehypeMermaid from 'rehype-mermaid';
 
 // https://astro.build/config
 export default defineConfig({
-	site: 'https://docs.tplr.ai',
+	site: 'https://docs.neuralinternet.ai',
 	markdown: {
 		rehypePlugins: [
 			[rehypeMermaid, {
