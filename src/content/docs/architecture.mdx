@@ -1,0 +1,462 @@
+---
+
+title: "Architecture"
+
+---
+
+
+
+import CollapsibleAside from '@components/CollapsibleAside.astro';
+
+import SourceLink from '@components/SourceLink.astro';
+
+
+
+<CollapsibleAside title="Relevant Source Files">
+
+  <SourceLink text="README.md" href="https://github.com/neuralinternet/SN27/blob/6261c454/README.md" />
+
+  <SourceLink text="compute/utils/parser.py" href="https://github.com/neuralinternet/SN27/blob/6261c454/compute/utils/parser.py" />
+
+  <SourceLink text="neurons/miner.py" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/miner.py" />
+
+  <SourceLink text="neurons/register_api.py" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/register_api.py" />
+
+  <SourceLink text="neurons/validator.py" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/validator.py" />
+
+</CollapsibleAside>
+
+
+
+
+
+
+
+
+## Purpose and Scope
+
+This document describes the high-level system architecture of the NI Compute Subnet, a decentralized GPU compute marketplace built on the Bittensor network. It covers the core system components, their interactions, communication protocols, and data flow patterns that enable validators to evaluate miner capabilities and allocate GPU resources to clients.
+
+For detailed protocol specifications, see [Communication Protocols](/communication-protocols#5). For database schema and operations, see [Database Operations](/validator-system/database-operations#2.3). For installation and deployment procedures, see [Installation and Setup](/installation-and-setup#1.2).
+
+## System Overview
+
+The NI Compute Subnet implements a three-tier architecture consisting of validators that assess miner performance, miners that provide GPU resources, and a resource allocation API that manages client requests. The system operates on Bittensor's peer-to-peer network while providing traditional REST API access for external clients.
+
+```mermaid
+graph TB
+    subgraph "External Clients"
+        WEB["Web Applications"]
+        CLI["CLI Tools"]
+        API_CLIENTS["API Clients"]
+    end
+    
+    subgraph "NI Compute Subnet Core"
+        subgraph "Validator Layer"
+            VALIDATOR["Validator<br/>neurons/validator.py"]
+            POG["ProofOfGPU<br/>Benchmarking Engine"]
+            SCORING["Scoring System<br/>calc_score_pog()"]
+        end
+        
+        subgraph "Resource Allocation Layer"
+            REGISTER_API["RegisterAPI<br/>neurons/register_api.py"]
+            ALLOCATION_LOGIC["Resource Management<br/>_allocate_container()"]
+            HEALTH_CHECK["Health Monitoring<br/>_check_allocation()"]
+        end
+        
+        subgraph "Miner Layer"
+            MINER["Miner<br/>neurons/miner.py"]
+            CONTAINER_MGR["Container Management<br/>neurons/Miner/container.py"]
+            ALLOCATION_HANDLER["Allocation Handler<br/>register_allocation()"]
+        end
+    end
+    
+    subgraph "Bittensor Network"
+        SUBTENSOR["ComputeSubnetSubtensor<br/>Blockchain Interface"]
+        METAGRAPH["Metagraph<br/>Network State"]
+        AXON_DENDRITE["Axon/Dendrite<br/>P2P Communication"]
+    end
+    
+    subgraph "Data Layer"
+        COMPUTE_DB[("ComputeDb<br/>SQLite Database")]
+        WANDB_STATE[("WandB<br/>Distributed State")]
+        CONFIG_FILES[("Configuration<br/>config.yaml")]
+    end
+    
+    %% External client interactions
+    WEB --> REGISTER_API
+    CLI --> REGISTER_API
+    API_CLIENTS --> REGISTER_API
+    
+    %% Core system interactions
+    VALIDATOR --> MINER
+    VALIDATOR --> SUBTENSOR
+    VALIDATOR --> POG
+    POG --> SCORING
+    
+    REGISTER_API --> ALLOCATION_LOGIC
+    ALLOCATION_LOGIC --> MINER
+    REGISTER_API --> HEALTH_CHECK
+    
+    MINER --> CONTAINER_MGR
+    MINER --> ALLOCATION_HANDLER
+    MINER --> AXON_DENDRITE
+    
+    %% Bittensor network interactions
+    VALIDATOR --> AXON_DENDRITE
+    MINER --> AXON_DENDRITE
+    AXON_DENDRITE --> SUBTENSOR
+    SUBTENSOR --> METAGRAPH
+    
+    %% Data layer interactions
+    VALIDATOR --> COMPUTE_DB
+    VALIDATOR --> WANDB_STATE
+    REGISTER_API --> COMPUTE_DB
+    MINER --> WANDB_STATE
+    VALIDATOR --> CONFIG_FILES
+```
+
+Sources: <SourceLink text="neurons/validator.py:70-89" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/validator.py#L70-L89" />, <SourceLink text="neurons/miner.py:79-94" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/miner.py#L79-L94" />, <SourceLink text="neurons/register_api.py:229-303" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/register_api.py#L229-L303" />, <SourceLink text="compute/axon.py" href="https://github.com/neuralinternet/SN27/blob/6261c454/compute/axon.py" />, <SourceLink text="compute/protocol.py" href="https://github.com/neuralinternet/SN27/blob/6261c454/compute/protocol.py" />
+
+## Core Components
+
+### Validator System
+
+The `Validator` class implements the core validation logic that maintains network integrity by evaluating miner performance and setting network weights.
+
+```mermaid
+graph TB
+    subgraph "Validator Core"
+        VALIDATOR_MAIN["Validator.__init__()<br/>neurons/validator.py:130"]
+        CONFIG_INIT["init_config()<br/>neurons/validator.py:211"]
+        SCORE_SYNC["sync_scores()<br/>neurons/validator.py:312"]
+    end
+    
+    subgraph "Proof of GPU System"
+        POG_MAIN["proof_of_gpu()<br/>neurons/validator.py:663"]
+        TEST_MINER["test_miner_gpu()<br/>neurons/validator.py:799"]
+        GPU_BENCHMARKS["GPU Benchmarking<br/>Merkle Proof Verification"]
+        SCRIPT_EXECUTION["execute_script_on_miner()<br/>neurons/Validator/pog.py"]
+    end
+    
+    subgraph "Scoring Engine"
+        CALC_SCORE["calc_score_pog()<br/>neurons/Validator/calculate_pow_score.py"]
+        RELIABILITY_SCORE["Reliability Scoring<br/>Challenge Success Rate"]
+        WEIGHT_SETTING["Network Weight Updates<br/>Bittensor Integration"]
+    end
+    
+    subgraph "Data Management"
+        COMPUTE_DB_OPS["ComputeDb Operations<br/>SQLite Transactions"]
+        WANDB_INTEGRATION["ComputeWandb<br/>Distributed Metrics"]
+        MINER_STATS["Miner Statistics<br/>retrieve_stats()"]
+    end
+    
+    VALIDATOR_MAIN --> CONFIG_INIT
+    VALIDATOR_MAIN --> POG_MAIN
+    VALIDATOR_MAIN --> SCORE_SYNC
+    
+    POG_MAIN --> TEST_MINER
+    TEST_MINER --> GPU_BENCHMARKS
+    TEST_MINER --> SCRIPT_EXECUTION
+    
+    SCORE_SYNC --> CALC_SCORE
+    CALC_SCORE --> RELIABILITY_SCORE
+    RELIABILITY_SCORE --> WEIGHT_SETTING
+    
+    VALIDATOR_MAIN --> COMPUTE_DB_OPS
+    VALIDATOR_MAIN --> WANDB_INTEGRATION
+    SCORE_SYNC --> MINER_STATS
+```
+
+The validator operates on a continuous cycle, performing hardware verification every 360 blocks and updating scores based on GPU performance benchmarks and challenge response reliability.
+
+Sources: <SourceLink text="neurons/validator.py:70-200" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/validator.py#L70-L200" />, <SourceLink text="neurons/Validator/pog.py" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/Validator/pog.py" />, <SourceLink text="neurons/Validator/calculate_pow_score.py" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/Validator/calculate_pow_score.py" />, <SourceLink text="neurons/Validator/database/" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/Validator/database/" />
+
+### Miner System
+
+The `Miner` class provides GPU compute resources to the network and handles allocation requests from validators and clients.
+
+```mermaid
+graph TB
+    subgraph "Miner Core"
+        MINER_MAIN["Miner.__init__()<br/>neurons/miner.py:117"]
+        AXON_INIT["init_axon()<br/>neurons/miner.py:222"]
+        SYNC_STATUS["sync_status()<br/>neurons/miner.py:304"]
+    end
+    
+    subgraph "Request Handlers"
+        ALLOCATE_HANDLER["allocate()<br/>neurons/miner.py:419"]
+        CHALLENGE_HANDLER["challenge()<br/>neurons/miner.py:491"]
+        BLACKLIST_LOGIC["base_blacklist()<br/>neurons/miner.py:330"]
+    end
+    
+    subgraph "Container Management"
+        REGISTER_ALLOC["register_allocation()<br/>neurons/Miner/allocate.py"]
+        CONTAINER_OPS["Container Operations<br/>neurons/Miner/container.py"]
+        DOCKER_LIFECYCLE["Docker Lifecycle<br/>build_sample_container()"]
+    end
+    
+    subgraph "Resource Monitoring"
+        ALLOCATION_STATUS["Allocation Status Tracking<br/>self.allocation_status"]
+        WANDB_UPDATES["WandB State Updates<br/>update_allocated()"]
+        HEALTH_CHECKS["Health Check Responses<br/>check_allocation()"]
+    end
+    
+    MINER_MAIN --> AXON_INIT
+    MINER_MAIN --> SYNC_STATUS
+    
+    AXON_INIT --> ALLOCATE_HANDLER
+    AXON_INIT --> CHALLENGE_HANDLER
+    ALLOCATE_HANDLER --> BLACKLIST_LOGIC
+    
+    ALLOCATE_HANDLER --> REGISTER_ALLOC
+    REGISTER_ALLOC --> CONTAINER_OPS
+    CONTAINER_OPS --> DOCKER_LIFECYCLE
+    
+    ALLOCATE_HANDLER --> ALLOCATION_STATUS
+    ALLOCATION_STATUS --> WANDB_UPDATES
+    ALLOCATE_HANDLER --> HEALTH_CHECKS
+```
+
+The miner continuously monitors for allocation opportunities while maintaining containerized environments for client workloads.
+
+Sources: <SourceLink text="neurons/miner.py:79-200" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/miner.py#L79-L200" />, <SourceLink text="neurons/Miner/allocate.py" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/Miner/allocate.py" />, <SourceLink text="neurons/Miner/container.py" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/Miner/container.py" />, <SourceLink text="compute/wandb/wandb.py" href="https://github.com/neuralinternet/SN27/blob/6261c454/compute/wandb/wandb.py" />
+
+### Resource Allocation API
+
+The `RegisterAPI` class exposes REST endpoints for external clients to allocate and manage GPU resources.
+
+```mermaid
+graph TB
+    subgraph "API Layer"
+        REGISTER_API["RegisterAPI.__init__()<br/>neurons/register_api.py:230"]
+        FASTAPI_APP["FastAPI Application<br/>self.app"]
+        ROUTE_SETUP["_setup_routes()<br/>neurons/register_api.py:344"]
+    end
+    
+    subgraph "Allocation Endpoints"
+        ALLOCATE_SPEC["allocate_spec()<br/>/service/allocate_spec"]
+        ALLOCATE_HOTKEY["allocate_hotkey()<br/>/service/allocate_hotkey"]
+        DEALLOCATE["deallocate()<br/>/service/deallocate"]
+        CHECK_STATUS["check_miner_status()<br/>/service/check_miner_status"]
+    end
+    
+    subgraph "Resource Management"
+        ALLOCATE_CONTAINER["_allocate_container()<br/>Resource Discovery"]
+        ALLOCATION_DB["update_allocation_db()<br/>State Persistence"]
+        HEALTH_MONITORING["_check_allocation()<br/>Timeout Management"]
+    end
+    
+    subgraph "External Integrations"
+        DENDRITE_CLIENT["bt.dendrite<br/>Miner Communication"]
+        WANDB_SYNC["_update_allocation_wandb()<br/>Distributed State"]
+        WEBHOOK_NOTIFY["_notify_allocation_status()<br/>External Callbacks"]
+    end
+    
+    REGISTER_API --> FASTAPI_APP
+    REGISTER_API --> ROUTE_SETUP
+    
+    ROUTE_SETUP --> ALLOCATE_SPEC
+    ROUTE_SETUP --> ALLOCATE_HOTKEY
+    ROUTE_SETUP --> DEALLOCATE
+    ROUTE_SETUP --> CHECK_STATUS
+    
+    ALLOCATE_SPEC --> ALLOCATE_CONTAINER
+    ALLOCATE_HOTKEY --> ALLOCATE_CONTAINER
+    ALLOCATE_CONTAINER --> ALLOCATION_DB
+    
+    REGISTER_API --> HEALTH_MONITORING
+    HEALTH_MONITORING --> ALLOCATION_DB
+    
+    ALLOCATE_CONTAINER --> DENDRITE_CLIENT
+    ALLOCATION_DB --> WANDB_SYNC
+    DEALLOCATE --> WEBHOOK_NOTIFY
+```
+
+The API maintains allocation state in both local SQLite database and distributed WandB storage for cross-validator synchronization.
+
+Sources: <SourceLink text="neurons/register_api.py:229-350" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/register_api.py#L229-L350" />, <SourceLink text="neurons/register_api.py:407-850" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/register_api.py#L407-L850" />, <SourceLink text="neurons/Validator/database/allocate.py" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/Validator/database/allocate.py" />
+
+## Communication Architecture
+
+The system implements a hybrid communication model combining Bittensor's peer-to-peer protocols with traditional REST APIs.
+
+```mermaid
+graph TB
+    subgraph "Protocol Layer"
+        SPECS_PROTOCOL["Specs Protocol<br/>compute/protocol.py"]
+        ALLOCATE_PROTOCOL["Allocate Protocol<br/>compute/protocol.py"]
+        CHALLENGE_PROTOCOL["Challenge Protocol<br/>compute/protocol.py"]
+    end
+    
+    subgraph "Bittensor Network Layer"
+        COMPUTE_AXON["ComputeSubnetAxon<br/>compute/axon.py"]
+        COMPUTE_SUBTENSOR["ComputeSubnetSubtensor<br/>compute/axon.py"]
+        DENDRITE_CLIENT["bt.dendrite<br/>RPC Client"]
+    end
+    
+    subgraph "REST API Layer"
+        FASTAPI_ROUTES["FastAPI Routes<br/>HTTP/HTTPS"]
+        WEBSOCKET_CONN["WebSocket Connection<br/>/connect"]
+        API_MIDDLEWARE["IPWhitelistMiddleware<br/>Security Layer"]
+    end
+    
+    subgraph "Communication Flows"
+        V_TO_M["Validator → Miner<br/>Specs/Challenge Queries"]
+        API_TO_M["RegisterAPI → Miner<br/>Allocation Requests"]
+        CLIENT_TO_API["External Client → API<br/>Resource Requests"]
+    end
+    
+    SPECS_PROTOCOL --> COMPUTE_AXON
+    ALLOCATE_PROTOCOL --> COMPUTE_AXON
+    CHALLENGE_PROTOCOL --> COMPUTE_AXON
+    
+    COMPUTE_AXON --> COMPUTE_SUBTENSOR
+    COMPUTE_AXON --> DENDRITE_CLIENT
+    
+    FASTAPI_ROUTES --> API_MIDDLEWARE
+    WEBSOCKET_CONN --> FASTAPI_ROUTES
+    
+    V_TO_M --> SPECS_PROTOCOL
+    V_TO_M --> CHALLENGE_PROTOCOL
+    API_TO_M --> ALLOCATE_PROTOCOL
+    API_TO_M --> DENDRITE_CLIENT
+    CLIENT_TO_API --> FASTAPI_ROUTES
+```
+
+**Protocol Message Flow:**
+1. **Specs Query**: Validator requests hardware specifications from miners
+2. **Allocation Request**: RegisterAPI or Validator requests resource allocation 
+3. **Challenge Response**: Validator sends proof-of-work challenges to miners
+4. **Health Check**: Periodic status verification of allocated resources
+
+Sources: <SourceLink text="compute/protocol.py" href="https://github.com/neuralinternet/SN27/blob/6261c454/compute/protocol.py" />, <SourceLink text="compute/axon.py" href="https://github.com/neuralinternet/SN27/blob/6261c454/compute/axon.py" />, <SourceLink text="neurons/register_api.py:344-406" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/register_api.py#L344-L406" />, <SourceLink text="neurons/validator.py:594-662" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/validator.py#L594-L662" />
+
+## Data Architecture
+
+The system uses a multi-tier data storage approach combining local SQLite databases with distributed state management.
+
+```mermaid
+graph TB
+    subgraph "Local Data Storage"
+        COMPUTE_DB[("ComputeDb<br/>SQLite Database")]
+        MINER_TABLE[("miner table<br/>uid, ss58_address")]
+        POG_STATS[("pog_stats table<br/>GPU performance data")]
+        ALLOCATION_TABLE[("allocation table<br/>active reservations")]
+        CHALLENGE_DETAILS[("challenge_details table<br/>success metrics")]
+    end
+    
+    subgraph "Distributed State"
+        WANDB_RUNS[("WandB Validator Runs<br/>Aggregated metrics")]
+        WANDB_MINERS[("WandB Miner Runs<br/>Hardware specifications")]
+        WANDB_ALLOCATED[("Allocated Hotkeys<br/>Resource status")]
+        WANDB_PENALIZED[("Penalized Hotkeys<br/>Blacklist data")]
+    end
+    
+    subgraph "Configuration Data"
+        CONFIG_YAML[("config.yaml<br/>GPU performance benchmarks")]
+        ENV_CONFIG[("Environment Variables<br/>API keys, endpoints")]
+        PROTOCOL_SCHEMAS[("Protocol Definitions<br/>Message validation")]
+    end
+    
+    subgraph "Data Access Layer"
+        DB_OPERATIONS["Database Operations<br/>compute/utils/db.py"]
+        WANDB_CLIENT["ComputeWandb<br/>compute/wandb/wandb.py"]
+        CONFIG_LOADER["Configuration Loader<br/>load_yaml_config()"]
+    end
+    
+    COMPUTE_DB --> MINER_TABLE
+    COMPUTE_DB --> POG_STATS
+    COMPUTE_DB --> ALLOCATION_TABLE
+    COMPUTE_DB --> CHALLENGE_DETAILS
+    
+    WANDB_RUNS --> WANDB_MINERS
+    WANDB_RUNS --> WANDB_ALLOCATED
+    WANDB_RUNS --> WANDB_PENALIZED
+    
+    CONFIG_YAML --> ENV_CONFIG
+    CONFIG_YAML --> PROTOCOL_SCHEMAS
+    
+    DB_OPERATIONS --> COMPUTE_DB
+    WANDB_CLIENT --> WANDB_RUNS
+    CONFIG_LOADER --> CONFIG_YAML
+```
+
+**Data Synchronization Patterns:**
+- Local database stores operational state and query results
+- WandB provides cross-validator state synchronization
+- Configuration files define GPU performance baselines and system parameters
+
+Sources: <SourceLink text="compute/utils/db.py" href="https://github.com/neuralinternet/SN27/blob/6261c454/compute/utils/db.py" />, <SourceLink text="compute/wandb/wandb.py" href="https://github.com/neuralinternet/SN27/blob/6261c454/compute/wandb/wandb.py" />, <SourceLink text="neurons/Validator/database/" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/Validator/database/" />, <SourceLink text="config.yaml" href="https://github.com/neuralinternet/SN27/blob/6261c454/config.yaml" />, <SourceLink text="neurons/validator.py:178-181" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/validator.py#L178-L181" />
+
+## Deployment Architecture
+
+The system supports distributed deployment across multiple validator and miner nodes with centralized API services.
+
+```mermaid
+graph TB
+    subgraph "Validator Nodes"
+        V1["Validator Instance 1<br/>neurons/validator.py"]
+        V2["Validator Instance 2<br/>neurons/validator.py"]
+        VN["Validator Instance N<br/>neurons/validator.py"]
+    end
+    
+    subgraph "Miner Nodes"
+        M1["Miner Instance 1<br/>neurons/miner.py + Docker"]
+        M2["Miner Instance 2<br/>neurons/miner.py + Docker"]
+        MN["Miner Instance N<br/>neurons/miner.py + Docker"]
+    end
+    
+    subgraph "API Services"
+        API1["RegisterAPI Instance 1<br/>neurons/register_api.py"]
+        API2["RegisterAPI Instance 2<br/>neurons/register_api.py"]
+        LB["Load Balancer<br/>Optional"]
+    end
+    
+    subgraph "Infrastructure Services"
+        BT_NETWORK["Bittensor Network<br/>Subtensor/Metagraph"]
+        WANDB_SERVICE["WandB Service<br/>Distributed State"]
+        MONITORING["System Monitoring<br/>PM2/Prometheus"]
+    end
+    
+    subgraph "Network Configuration"
+        FIREWALL["UFW Firewall<br/>Ports 4444, 8091"]
+        SSH_ACCESS["SSH Access<br/>Container Management"]
+        DOCKER_RUNTIME["Docker + NVIDIA Runtime<br/>GPU Containers"]
+    end
+    
+    V1 --> BT_NETWORK
+    V2 --> BT_NETWORK
+    VN --> BT_NETWORK
+    
+    M1 --> BT_NETWORK
+    M2 --> BT_NETWORK
+    MN --> BT_NETWORK
+    
+    API1 --> BT_NETWORK
+    API2 --> BT_NETWORK
+    LB --> API1
+    LB --> API2
+    
+    V1 --> WANDB_SERVICE
+    V2 --> WANDB_SERVICE
+    API1 --> WANDB_SERVICE
+    
+    M1 --> DOCKER_RUNTIME
+    M2 --> DOCKER_RUNTIME
+    MN --> DOCKER_RUNTIME
+    
+    FIREWALL --> SSH_ACCESS
+    SSH_ACCESS --> DOCKER_RUNTIME
+    
+    MONITORING --> V1
+    MONITORING --> M1
+    MONITORING --> API1
+```
+
+**Deployment Requirements:**
+- **Validators**: Require access to Subtensor endpoint and sufficient computational resources for GPU benchmarking
+- **Miners**: Need NVIDIA GPUs, Docker runtime, and open ports (4444 for SSH, 8091 for axon)
+- **RegisterAPI**: Can run on dedicated servers with database persistence and WandB integration
+
+Sources: <SourceLink text="README.md:110-340" href="https://github.com/neuralinternet/SN27/blob/6261c454/README.md#L110-L340" />, <SourceLink text="compute/utils/parser.py:159-165" href="https://github.com/neuralinternet/SN27/blob/6261c454/compute/utils/parser.py#L159-L165" />, <SourceLink text="neurons/miner.py:154-167" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/miner.py#L154-L167" />, <SourceLink text="neurons/register_api.py:86-95" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/register_api.py#L86-L95" />

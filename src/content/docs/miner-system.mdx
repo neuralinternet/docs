@@ -1,0 +1,425 @@
+---
+
+title: "Miner System"
+
+---
+
+
+
+import CollapsibleAside from '@components/CollapsibleAside.astro';
+
+import SourceLink from '@components/SourceLink.astro';
+
+
+
+<CollapsibleAside title="Relevant Source Files">
+
+  <SourceLink text="neurons/miner.py" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/miner.py" />
+
+</CollapsibleAside>
+
+
+
+
+
+
+
+
+The Miner System provides compute resources to the NI Compute Subnet by responding to resource allocation requests and validation challenges from validators. It manages Docker containers for secure compute workloads, handles proof-of-work challenges, and maintains network connectivity through the Bittensor protocol.
+
+For information about validator-side operations, see [Validator System](/validator-system#2). For details about the resource allocation API that coordinates with miners, see [Resource Allocation API](/resource-allocation-api#4). For container lifecycle management specifics, see [Container Management](/miner-system/container-management#3.1).
+
+## Architecture Overview
+
+The miner system is implemented as a single `Miner` class that operates as a Bittensor axon server, handling three primary types of requests from validators: resource allocation, challenge-response, and system monitoring.
+
+### Core System Components
+
+```mermaid
+graph TB
+    subgraph "Miner Class (neurons/miner.py)"
+        MINER["Miner"]
+        ALLOCATE["allocate()"]
+        CHALLENGE["challenge()"]
+        BLACKLIST["base_blacklist()"]
+        PRIORITY["base_priority()"]
+    end
+    
+    subgraph "Request Processing"
+        ALLOC_REQ["Allocate Synapse"]
+        CHALL_REQ["Challenge Synapse"]
+        BLACKLIST_CHECK["Blacklist Check"]
+        PRIORITY_CALC["Priority Calculation"]
+    end
+    
+    subgraph "Container Management"
+        REGISTER_ALLOC["register_allocation()"]
+        DEREGISTER_ALLOC["deregister_allocation()"]
+        CHECK_ALLOC["check_allocation()"]
+        CONTAINER_OPS["Container Operations"]
+    end
+    
+    subgraph "Network Layer"
+        AXON["ComputeSubnetAxon"]
+        SUBTENSOR["ComputeSubnetSubtensor"]
+        METAGRAPH["bt.metagraph"]
+        WALLET["bt.wallet"]
+    end
+    
+    subgraph "Monitoring & State"
+        WANDB["ComputeWandb"]
+        SPECS_UPDATE["update_specs()"]
+        ALLOCATED_UPDATE["update_allocated()"]
+    end
+    
+    subgraph "Infrastructure"
+        DOCKER["Docker Runtime"]
+        SSH_SERVER["SSH Access"]
+        HASHCAT["Hashcat (PoW)"]
+    end
+    
+    %% Request flow
+    ALLOC_REQ --> BLACKLIST_CHECK
+    CHALL_REQ --> BLACKLIST_CHECK
+    BLACKLIST_CHECK --> PRIORITY_CALC
+    PRIORITY_CALC --> ALLOCATE
+    PRIORITY_CALC --> CHALLENGE
+    
+    %% Allocation flow
+    ALLOCATE --> REGISTER_ALLOC
+    ALLOCATE --> DEREGISTER_ALLOC
+    ALLOCATE --> CHECK_ALLOC
+    REGISTER_ALLOC --> CONTAINER_OPS
+    CONTAINER_OPS --> DOCKER
+    CONTAINER_OPS --> SSH_SERVER
+    
+    %% Challenge flow
+    CHALLENGE --> HASHCAT
+    
+    %% Network integration
+    MINER --> AXON
+    AXON --> SUBTENSOR
+    AXON --> METAGRAPH
+    MINER --> WALLET
+    
+    %% Monitoring
+    MINER --> WANDB
+    WANDB --> SPECS_UPDATE
+    WANDB --> ALLOCATED_UPDATE
+    
+    %% Security
+    MINER --> BLACKLIST
+    MINER --> PRIORITY
+```
+
+Sources: <SourceLink text="neurons/miner.py:79-714" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/miner.py#L79-L714" />
+
+### Miner Lifecycle and Main Loop
+
+```mermaid
+sequenceDiagram
+    participant MAIN as "main()"
+    participant MINER as "Miner.__init__()"
+    participant AXON as "ComputeSubnetAxon"
+    participant WANDB as "ComputeWandb"
+    participant LOOP as "start() Loop"
+    participant VALIDATOR as "Validator"
+    
+    MAIN->>MINER: "Initialize miner"
+    MINER->>MINER: "init_config()"
+    MINER->>MINER: "init_black_and_white_list()"
+    MINER->>AXON: "Initialize axon server"
+    MINER->>WANDB: "Initialize WandB monitoring"
+    MINER->>MINER: "build_check_container()"
+    
+    MINER->>AXON: "axon.attach(allocate, challenge)"
+    MINER->>AXON: "axon.serve(netuid, subtensor)"
+    MINER->>AXON: "axon.start()"
+    
+    MINER->>LOOP: "asyncio.run(start())"
+    
+    loop "Every 5 seconds"
+        LOOP->>LOOP: "sync_local()"
+        
+        alt "Every 30 blocks (~6 min)"
+            LOOP->>LOOP: "get_updated_validator()"
+        end
+        
+        alt "Every 150 blocks (~30 min)"
+            LOOP->>WANDB: "update_specs()"
+        end
+        
+        alt "Every 75 blocks (~15 min)"
+            LOOP->>LOOP: "sync_status()"
+            LOOP->>WANDB: "log_chain_data()"
+        end
+    end
+    
+    Note over VALIDATOR,AXON: "Concurrent request handling"
+    VALIDATOR->>AXON: "Allocate/Challenge requests"
+    AXON->>MINER: "Route to handler methods"
+```
+
+Sources: <SourceLink text="neurons/miner.py:702-714" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/miner.py#L702-L714" />, <SourceLink text="neurons/miner.py:606-700" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/miner.py#L606-L700" />, <SourceLink text="neurons/miner.py:117-189" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/miner.py#L117-L189" />
+
+## Request Handling System
+
+The miner processes two primary types of requests from validators through the Bittensor axon protocol: `Allocate` requests for compute resource management and `Challenge` requests for proof-of-work validation.
+
+### Request Processing Pipeline
+
+All incoming requests go through a standardized processing pipeline that includes blacklisting, priority calculation, and request-specific handling.
+
+```mermaid
+graph LR
+    subgraph "Incoming Request"
+        REQ["Synapse Request"]
+        HOTKEY["dendrite.hotkey"]
+        STAKE["Validator Stake"]
+    end
+    
+    subgraph "Security Layer"
+        BLACKLIST_FN["blacklist_allocate()"]
+        BLACKLIST_BASE["base_blacklist()"]
+        WHITELIST_CHECK["whitelist_hotkeys"]
+        STAKE_CHECK["validator_permit_stake"]
+        EXPLOITER_CHECK["exploiters_hotkeys_set"]
+    end
+    
+    subgraph "Priority Layer"
+        PRIORITY_FN["priority_allocate()"]
+        PRIORITY_BASE["base_priority()"]
+        STAKE_PRIORITY["metagraph.S[caller_uid]"]
+        MINER_PRIORITY["miner_priority_allocate"]
+    end
+    
+    subgraph "Handler Layer"
+        ALLOCATE_HANDLER["allocate()"]
+        CHALLENGE_HANDLER["challenge()"]
+    end
+    
+    REQ --> BLACKLIST_FN
+    HOTKEY --> BLACKLIST_BASE
+    STAKE --> STAKE_CHECK
+    
+    BLACKLIST_FN --> BLACKLIST_BASE
+    BLACKLIST_BASE --> WHITELIST_CHECK
+    BLACKLIST_BASE --> STAKE_CHECK
+    BLACKLIST_BASE --> EXPLOITER_CHECK
+    
+    REQ --> PRIORITY_FN
+    PRIORITY_FN --> PRIORITY_BASE
+    PRIORITY_BASE --> STAKE_PRIORITY
+    PRIORITY_FN --> MINER_PRIORITY
+    
+    REQ --> ALLOCATE_HANDLER
+    REQ --> CHALLENGE_HANDLER
+```
+
+Sources: <SourceLink text="neurons/miner.py:330-374" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/miner.py#L330-L374" />, <SourceLink text="neurons/miner.py:375-385" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/miner.py#L375-L385" />, <SourceLink text="neurons/miner.py:397-403" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/miner.py#L397-L403" />
+
+### Blacklist and Security Controls
+
+The `base_blacklist()` method implements comprehensive security controls to prevent unauthorized access and abuse:
+
+| Security Check | Implementation | Purpose |
+|---|---|---|
+| Whitelist Check | `hotkey not in self.whitelist_hotkeys` | Allow trusted validators regardless of stake |
+| Network Recognition | `hotkey not in self.metagraph.hotkeys` | Reject unregistered entities |
+| Stake Requirement | `stake &lt; validator_permit_stake` | Ensure minimum validator stake |
+| Explicit Blacklist | `hotkey in self.blacklist_hotkeys` | Block specific problematic validators |
+| Exploiter Detection | `hotkey in self.exploiters_hotkeys_set` | Block known malicious actors |
+
+Sources: <SourceLink text="neurons/miner.py:330-374" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/miner.py#L330-L374" />
+
+## Resource Allocation Handler
+
+The `allocate()` method manages the complete lifecycle of compute resource allocation, from initial availability checks to container provisioning and deallocation.
+
+### Allocation Request Types
+
+```mermaid
+graph TD
+    subgraph "Allocate Request Processing"
+        ALLOCATE_REQ["Allocate Synapse"]
+        CHECKING_FLAG["synapse.checking"]
+        TIMELINE["synapse.timeline"]
+        DOCKER_CHANGE["synapse.docker_change"]
+    end
+    
+    subgraph "Checking Mode (checking=True)"
+        CHECK_POSITIVE["timeline > 0"]
+        CHECK_ALLOCATION["check_allocation()"]
+        CHECK_NEGATIVE["timeline : 0"]
+        CHECK_IF_ALLOCATED["check_if_allocated()"]
+    end
+    
+    subgraph "Docker Change Mode (docker_change=True)"
+        EXCHANGE_KEY["exchange_key_container()"]
+        RESTART_CONTAINER["restart_container()"]
+        PAUSE_CONTAINER["pause_container()"]
+        UNPAUSE_CONTAINER["unpause_container()"]
+    end
+    
+    subgraph "Allocation Mode (Normal)"
+        ALLOC_POSITIVE["timeline > 0"]
+        REGISTER_ALLOCATION["register_allocation()"]
+        ALLOC_NEGATIVE["timeline : 0"] 
+        DEREGISTER_ALLOCATION["deregister_allocation()"]
+    end
+    
+    ALLOCATE_REQ --> CHECKING_FLAG
+    CHECKING_FLAG -->|"True"| CHECK_POSITIVE
+    CHECKING_FLAG -->|"True"| CHECK_NEGATIVE
+    CHECK_POSITIVE --> CHECK_ALLOCATION
+    CHECK_NEGATIVE --> CHECK_IF_ALLOCATED
+    
+    ALLOCATE_REQ --> DOCKER_CHANGE
+    DOCKER_CHANGE -->|"True"| EXCHANGE_KEY
+    DOCKER_CHANGE -->|"True"| RESTART_CONTAINER
+    DOCKER_CHANGE -->|"True"| PAUSE_CONTAINER
+    DOCKER_CHANGE -->|"True"| UNPAUSE_CONTAINER
+    
+    ALLOCATE_REQ --> ALLOC_POSITIVE
+    ALLOCATE_REQ --> ALLOC_NEGATIVE
+    ALLOC_POSITIVE --> REGISTER_ALLOCATION
+    ALLOC_NEGATIVE --> DEREGISTER_ALLOCATION
+```
+
+Sources: <SourceLink text="neurons/miner.py:419-479" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/miner.py#L419-L479" />
+
+### Allocation State Management
+
+The miner tracks allocation state through multiple mechanisms to ensure consistency and prevent conflicts:
+
+- **WandB Integration**: `self.wandb.update_allocated()` synchronizes allocation status across the network
+- **File-based State**: `allocation_key` file stores the current allocation's public key
+- **Container State**: Docker container lifecycle tied to allocation status
+- **Concurrency Control**: `self.allocate_action` flag prevents concurrent allocations
+
+Sources: <SourceLink text="neurons/miner.py:405-417" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/miner.py#L405-L417" />, <SourceLink text="neurons/miner.py:190-221" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/miner.py#L190-L221" />
+
+## Challenge Response System
+
+The `challenge()` method handles proof-of-work validation requests from validators, though the actual proof-of-work execution is currently disabled in the implementation.
+
+### Challenge Processing Flow
+
+```mermaid
+graph LR
+    subgraph "Challenge Request"
+        CHALL_REQ["Challenge Synapse"]
+        DIFFICULTY["challenge_difficulty"]
+        HASH["challenge_hash"]
+        SALT["challenge_salt"]
+        MODE["challenge_mode"]
+    end
+    
+    subgraph "Validation"
+        DIFFICULTY_CHECK["difficulty <: 0"]
+        VALIDATOR_ID["dendrite.hotkey[:8]"]
+        RUN_ID["run_id generation"]
+    end
+    
+    subgraph "PoW Execution (Disabled)"
+        HASHCAT_PATH["hashcat_path"]
+        WORKLOAD_PROFILE["hashcat_workload_profile"]
+        EXTENDED_OPTIONS["hashcat_extended_options"]
+        RUN_MINER_POW["run_miner_pow()"]
+    end
+    
+    CHALL_REQ --> DIFFICULTY_CHECK
+    CHALL_REQ --> VALIDATOR_ID
+    VALIDATOR_ID --> RUN_ID
+    
+    CHALL_REQ --> HASHCAT_PATH
+    CHALL_REQ --> WORKLOAD_PROFILE
+    CHALL_REQ --> EXTENDED_OPTIONS
+    RUN_ID --> RUN_MINER_POW
+```
+
+Sources: <SourceLink text="neurons/miner.py:491-515" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/miner.py#L491-L515" />
+
+## Network Integration and Monitoring
+
+The miner maintains continuous integration with the Bittensor network through periodic synchronization and state updates.
+
+### Network Synchronization Schedule
+
+| Operation | Frequency | Purpose |
+|---|---|---|
+| `sync_local()` | Every 5 seconds | Update local metagraph state |
+| `get_updated_validator()` | Every 30 blocks (~6 min) | Refresh validator whitelist |
+| `update_specs()` | Every 150 blocks (~30 min) | Sync hardware specs to WandB |
+| `sync_status()` | Every 75 blocks (~15 min) | Update registration status and log metrics |
+
+### WandB Integration Points
+
+The miner integrates with Weights & Biases for distributed state management and monitoring:
+
+- **Specs Management**: `self.wandb.update_specs()` publishes hardware specifications
+- **Allocation Tracking**: `self.wandb.update_allocated()` maintains allocation state
+- **Chain Data Logging**: `self.wandb.log_chain_data()` records network metrics
+- **Validator Discovery**: `self.wandb.get_allocated_hotkeys()` queries network state
+
+Sources: <SourceLink text="neurons/miner.py:606-700" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/miner.py#L606-L700" />, <SourceLink text="neurons/miner.py:179-181" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/miner.py#L179-L181" />
+
+### Initialization and Configuration
+
+The miner initialization process follows a structured sequence to establish network connectivity and prepare for operation:
+
+```mermaid
+graph TD
+    subgraph "Configuration Phase"
+        INIT_CONFIG["init_config()"]
+        PARSE_ARGS["ComputeArgPaser"]
+        LOGGING_SETUP["bt.logging setup"]
+    end
+    
+    subgraph "Network Objects"
+        WALLET_INIT["bt.wallet(config)"]
+        SUBTENSOR_INIT["ComputeSubnetSubtensor(config)"]
+        METAGRAPH_INIT["subtensor.metagraph(netuid)"]
+    end
+    
+    subgraph "Infrastructure Setup"
+        DOCKER_CHECK["check_docker_availability()"]
+        BUILD_CONTAINER["build_check_container()"]
+        BUILD_SAMPLE["build_sample_container()"]
+        CUDA_CHECK["check_cuda_availability()"]
+    end
+    
+    subgraph "Security Setup"
+        BLACKLIST_INIT["init_black_and_white_list()"]
+        WHITELIST_SETUP["TRUSTED_VALIDATORS_HOTKEYS"]
+        EXPLOITER_SETUP["SUSPECTED_EXPLOITERS_HOTKEYS"]
+    end
+    
+    subgraph "Service Initialization"
+        AXON_INIT["init_axon()"]
+        WANDB_INIT["ComputeWandb initialization"]
+        ALLOCATION_CHECK["__check_alloaction_errors()"]
+    end
+    
+    INIT_CONFIG --> PARSE_ARGS
+    PARSE_ARGS --> LOGGING_SETUP
+    
+    LOGGING_SETUP --> WALLET_INIT
+    WALLET_INIT --> SUBTENSOR_INIT
+    SUBTENSOR_INIT --> METAGRAPH_INIT
+    
+    METAGRAPH_INIT --> DOCKER_CHECK
+    DOCKER_CHECK --> BUILD_CONTAINER
+    BUILD_CONTAINER --> BUILD_SAMPLE
+    BUILD_SAMPLE --> CUDA_CHECK
+    
+    CUDA_CHECK --> BLACKLIST_INIT
+    BLACKLIST_INIT --> WHITELIST_SETUP
+    WHITELIST_SETUP --> EXPLOITER_SETUP
+    
+    EXPLOITER_SETUP --> AXON_INIT
+    AXON_INIT --> WANDB_INIT
+    WANDB_INIT --> ALLOCATION_CHECK
+```
+
+Sources: <SourceLink text="neurons/miner.py:117-189" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/miner.py#L117-L189" />, <SourceLink text="neurons/miner.py:254-281" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/miner.py#L254-L281" />, <SourceLink text="neurons/miner.py:222-252" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/miner.py#L222-L252" />

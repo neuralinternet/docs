@@ -1,0 +1,287 @@
+---
+
+title: "Custom Axon and Subtensor"
+
+---
+
+
+
+import CollapsibleAside from '@components/CollapsibleAside.astro';
+
+import SourceLink from '@components/SourceLink.astro';
+
+
+
+<CollapsibleAside title="Relevant Source Files">
+
+  <SourceLink text="compute/axon.py" href="https://github.com/neuralinternet/SN27/blob/6261c454/compute/axon.py" />
+
+</CollapsibleAside>
+
+
+
+
+
+
+
+
+This document covers the compute subnet's custom extensions to Bittensor's core communication components: Axon and Subtensor. These extensions provide subnet-specific functionality including custom version handling, Prometheus metrics integration, and enhanced request preprocessing.
+
+For information about the core communication protocols used by these components, see [Specs, Allocate, and Challenge Protocols](/communication-protocols/specs-allocate-and-challenge-protocols#5.1). For monitoring and metrics infrastructure, see [Monitoring and Metrics](/monitoring-and-metrics#6).
+
+## Architecture Overview
+
+The compute subnet extends Bittensor's base communication classes to add subnet-specific functionality. The main extensions include custom serve extrinsics, Prometheus metrics support, and enhanced middleware processing.
+
+```mermaid
+graph TB
+    subgraph "Bittensor Base Classes"
+        BaseAxon["bittensor.core.axon.Axon"]
+        BaseSubtensor["bittensor.core.subtensor.Subtensor"]
+        BaseMiddleware["bittensor.core.axon.AxonMiddleware"]
+    end
+    
+    subgraph "Compute Subnet Extensions"
+        ComputeAxon["ComputeSubnetAxon"]
+        ComputeSubtensor["ComputeSubnetSubtensor"]
+        ComputeMiddleware["ComputeSubnetAxonMiddleware"]
+        CustomServe["custom_serve_extrinsic"]
+    end
+    
+    subgraph "Integration Components"
+        VersionInt["__version_as_int__"]
+        LocalVersion["get_local_version()"]
+        PrometheusExtrinsic["prometheus_extrinsic"]
+    end
+    
+    BaseAxon --> ComputeAxon
+    BaseSubtensor --> ComputeSubtensor
+    BaseMiddleware --> ComputeMiddleware
+    
+    ComputeAxon --> VersionInt
+    ComputeAxon --> LocalVersion
+    ComputeSubtensor --> PrometheusExtrinsic
+    ComputeMiddleware --> VersionInt
+    CustomServe --> VersionInt
+    
+    CustomServe -.->|"Patches"| BaseAxon
+```
+
+**Sources:** <SourceLink text="compute/axon.py:1-488" href="https://github.com/neuralinternet/SN27/blob/6261c454/compute/axon.py#L1-L488" />
+
+## Custom Serve Extrinsic
+
+The `custom_serve_extrinsic` function replaces Bittensor's standard serve extrinsic functionality to incorporate compute subnet specific versioning.
+
+### Function Implementation
+
+The custom serve extrinsic handles axon registration on the blockchain with subnet-specific parameters:
+
+```mermaid
+graph TD
+    Start["custom_serve_extrinsic()"]
+    Unlock["unlock_key(wallet)"]
+    Params["Create AxonServeCallParams"]
+    CheckNeuron["Check existing neuron state"]
+    UpToDate{{"Neuron up to date?"}}
+    DoServe["do_serve_axon()"]
+    Success{{"Success?"}}
+    Return["Return result"]
+    
+    Start --> Unlock
+    Unlock --> Params
+    Params --> CheckNeuron
+    CheckNeuron --> UpToDate
+    UpToDate -->|"Yes"| Return
+    UpToDate -->|"No"| DoServe
+    DoServe --> Success
+    Success --> Return
+    
+    Params -.-> VersionInt["__version_as_int__"]
+```
+
+Key characteristics:
+- Uses `__version_as_int__` for subnet version identification
+- Includes placeholder parameters for future extensibility
+- Patches the original Bittensor serve extrinsic at module level
+- Handles certificate-based TLS configuration
+
+**Sources:** <SourceLink text="compute/axon.py:63-150" href="https://github.com/neuralinternet/SN27/blob/6261c454/compute/axon.py#L63-L150" />
+
+## ComputeSubnetSubtensor
+
+The `ComputeSubnetSubtensor` class extends the base Subtensor with Prometheus metrics functionality, allowing miners and validators to register metrics endpoints on the blockchain.
+
+### Prometheus Integration
+
+```mermaid
+graph LR
+    Client["Wallet/Client"]
+    SubtensorClass["ComputeSubnetSubtensor"]
+    PrometheusMethod["serve_prometheus()"]
+    ExtrinsicMethod["do_serve_prometheus()"]
+    Blockchain["Bittensor Blockchain"]
+    
+    Client --> SubtensorClass
+    SubtensorClass --> PrometheusMethod
+    PrometheusMethod --> ExtrinsicMethod
+    ExtrinsicMethod --> Blockchain
+    
+    PrometheusMethod -.-> PrometheusExtrinsicFunc["prometheus_extrinsic()"]
+```
+
+### Key Methods
+
+| Method | Purpose | Parameters |
+|--------|---------|------------|
+| `serve_prometheus` | Public interface for Prometheus registration | `wallet`, `port`, `netuid`, wait flags |
+| `do_serve_prometheus` | Internal extrinsic submission handler | `wallet`, `call_params`, wait flags |
+
+The implementation includes:
+- Retry logic with exponential backoff
+- Exception handling for substrate requests
+- Support for inclusion and finalization waiting
+- Integration with the compute subnet's Prometheus extrinsic function
+
+**Sources:** <SourceLink text="compute/axon.py:152-283" href="https://github.com/neuralinternet/SN27/blob/6261c454/compute/axon.py#L152-L283" />
+
+## ComputeSubnetAxon
+
+The `ComputeSubnetAxon` class extends the base Axon with compute subnet specific configuration and information handling.
+
+### Architecture
+
+```mermaid
+graph TB
+    subgraph "ComputeSubnetAxon Components"
+        Config["Configuration Management"]
+        Wallet["Wallet Integration"]
+        Network["Network Configuration"]
+        Middleware["ComputeSubnetAxonMiddleware"]
+        FastAPI["FastAPI Application"]
+    end
+    
+    subgraph "Custom Overrides"
+        InfoMethod["info() method"]
+        LocalVersionFunc["get_local_version()"]
+        ProtocolValues["Protocol Values<br/>placeholder1:1<br/>placeholder2:2"]
+    end
+    
+    Config --> Network
+    Wallet --> InfoMethod
+    InfoMethod --> LocalVersionFunc
+    InfoMethod --> ProtocolValues
+    FastAPI --> Middleware
+```
+
+### Info Method Override
+
+The `info()` method returns subnet-specific axon information:
+
+- Uses `get_local_version()` instead of standard versioning
+- Sets protocol version to 4
+- Includes custom placeholder values for future extensibility
+- Returns properly formatted `AxonInfo` object
+
+### Configuration Parameters
+
+| Parameter | Purpose | Default Handling |
+|-----------|---------|------------------|
+| `external_ip` | External IP for network communication | Auto-detected if not provided |
+| `external_port` | External port for network communication | Uses internal port if not provided |
+| `max_workers` | Thread pool size | From configuration |
+
+**Sources:** <SourceLink text="compute/axon.py:285-388" href="https://github.com/neuralinternet/SN27/blob/6261c454/compute/axon.py#L285-L388" />
+
+## ComputeSubnetAxonMiddleware
+
+The `ComputeSubnetAxonMiddleware` extends the base middleware with compute subnet specific request preprocessing.
+
+### Request Processing Flow
+
+```mermaid
+sequenceDiagram
+    participant Request as "Incoming Request"
+    participant Middleware as "ComputeSubnetAxonMiddleware"
+    participant Synapse as "Synapse Object"
+    participant Wallet as "Wallet (Signing)"
+    
+    Request ->> Middleware: HTTP Request
+    Middleware ->> Middleware: Extract request_name from URL
+    Middleware ->> Middleware: Get synapse class type
+    Middleware ->> Synapse: Create from headers
+    Middleware ->> Synapse: Fill axon info (__version_as_int__)
+    Middleware ->> Synapse: Fill dendrite info
+    Middleware ->> Wallet: Sign message
+    Wallet -->> Middleware: Signature
+    Middleware ->> Synapse: Set signature
+    Middleware -->> Request: Return processed synapse
+```
+
+### Custom Preprocessing
+
+The `preprocess` method implements compute subnet specific logic:
+
+1. **Request Name Extraction**: Parses request name from URL path
+2. **Synapse Creation**: Instantiates appropriate synapse type from headers
+3. **Version Handling**: Sets axon version to `__version_as_int__`
+4. **Signature Generation**: Signs with wallet hotkey using custom message format
+
+### Error Handling
+
+The middleware handles three main error types:
+- `InvalidRequestNameError`: Malformed URL paths
+- `UnknownSynapseError`: Unknown synapse types
+- `SynapseParsingError`: Header parsing failures
+
+**Sources:** <SourceLink text="compute/axon.py:391-487" href="https://github.com/neuralinternet/SN27/blob/6261c454/compute/axon.py#L391-L487" />
+
+## Integration Workflow
+
+The custom Axon and Subtensor components integrate with the broader compute subnet architecture through specific workflows:
+
+```mermaid
+graph TD
+    subgraph "Miner/Validator Startup"
+        Start["Process Start"]
+        CreateAxon["Create ComputeSubnetAxon"]
+        CreateSubtensor["Create ComputeSubnetSubtensor"]
+        ServeAxon["Serve Axon (custom_serve_extrinsic)"]
+        ServePrometheus["Serve Prometheus metrics"]
+    end
+    
+    subgraph "Runtime Operations"
+        RequestProcessing["Process Incoming Requests"]
+        MiddlewareHandling["ComputeSubnetAxonMiddleware"]
+        SynapseProcessing["Synapse Processing"]
+        ResponseGeneration["Response Generation"]
+    end
+    
+    subgraph "Blockchain Integration"
+        BlockchainReg["Blockchain Registration"]
+        NetworkState["Network State Updates"]
+        MetricsReporting["Metrics Reporting"]
+    end
+    
+    Start --> CreateAxon
+    Start --> CreateSubtensor
+    CreateAxon --> ServeAxon
+    CreateSubtensor --> ServePrometheus
+    
+    ServeAxon --> BlockchainReg
+    ServePrometheus --> MetricsReporting
+    
+    RequestProcessing --> MiddlewareHandling
+    MiddlewareHandling --> SynapseProcessing
+    SynapseProcessing --> ResponseGeneration
+    
+    BlockchainReg --> NetworkState
+```
+
+This integration ensures that:
+- All network communication uses compute subnet versioning
+- Prometheus metrics are properly registered and accessible
+- Request processing includes subnet-specific preprocessing
+- Blockchain registration includes all necessary subnet parameters
+
+**Sources:** <SourceLink text="compute/axon.py:1-488" href="https://github.com/neuralinternet/SN27/blob/6261c454/compute/axon.py#L1-L488" />

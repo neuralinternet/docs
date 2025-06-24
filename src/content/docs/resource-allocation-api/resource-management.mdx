@@ -1,0 +1,346 @@
+---
+
+title: "Resource Management"
+
+---
+
+
+
+import CollapsibleAside from '@components/CollapsibleAside.astro';
+
+import SourceLink from '@components/SourceLink.astro';
+
+
+
+<CollapsibleAside title="Relevant Source Files">
+
+  <SourceLink text="neurons/register_api.py" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/register_api.py" />
+
+</CollapsibleAside>
+
+
+
+
+
+
+
+
+## Purpose and Scope
+
+The Resource Management system implements the core allocation logic within the Resource Allocation API, handling resource discovery, allocation strategies, health monitoring, and state synchronization. This system operates within the `RegisterAPI` class and provides the intelligence for matching compute requirements with available miners, managing resource lifecycle, and maintaining distributed state.
+
+For information about the API endpoints that expose these capabilities, see [API Endpoints](/resource-allocation-api/api-endpoints#4.1). For broader context about the validator system that validates miner capabilities, see [Validator System](/validator-system#2).
+
+## Resource Discovery System
+
+The resource discovery system identifies and evaluates candidate miners for allocation requests through a multi-stage process involving database queries, network validation, and scoring algorithms.
+
+### Candidate Selection Process
+
+```mermaid
+flowchart TD
+    DevReq["DeviceRequirement"] --> SelectCandidates["select_allocate_miners_hotkey()"]
+    SelectCandidates --> CandidateList["candidates_hotkey[]"]
+    CandidateList --> FilterAxons["Filter metagraph.axons"]
+    FilterAxons --> AxonCandidates["axon_candidates[]"]
+    
+    AxonCandidates --> CheckAvailability["dendrite(Allocate(checking:True))"]
+    CheckAvailability --> ValidateResponses["Validate responses"]
+    ValidateResponses --> FinalCandidates["final_candidates_hotkey[]"]
+    
+    FinalCandidates --> ScoreSort["Score-based sorting"]
+    ScoreSort --> SortedCandidates["sorted_hotkeys[]"]
+    SortedCandidates --> AttemptAllocation["Attempt allocation"]
+```
+
+**Candidate Discovery Flow**
+
+Sources: <SourceLink text="neurons/register_api.py:2741-2805" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/register_api.py#L2741-L2805" />
+
+The system uses a two-phase approach for candidate selection:
+
+1. **Database Filtering**: The `select_allocate_miners_hotkey()` function queries the local database to find miners matching hardware requirements
+2. **Network Validation**: Available candidates are validated through the Bittensor network using `Allocate` synapse with `checking=True`
+3. **Scoring and Prioritization**: Valid candidates are sorted by their network scores to prioritize higher-performing miners
+
+### WandB-Based Resource Discovery
+
+```mermaid
+flowchart TD
+    WandbQuery["get_wandb_running_miners()"] --> FilterRuns["Filter running miner runs"]
+    FilterRuns --> CheckPenalized["Check penalized_hotkeys"]
+    CheckPenalized --> ValidateAge["miner_is_older_than(48h)"]
+    ValidateAge --> ValidatePog["miner_pog_ok(2.5h)"]
+    ValidatePog --> CheckActive["Verify in metagraph.axons"]
+    CheckActive --> ExtractSpecs["Extract specs from run.config"]
+    ExtractSpecs --> SpecsDetails["specs_details{}"]
+    SpecsDetails --> ResourceList["resource_list[]"]
+```
+
+**WandB Resource Discovery Flow**
+
+Sources: <SourceLink text="neurons/register_api.py:1646-1702" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/register_api.py#L1646-L1702" />, <SourceLink text="neurons/register_api.py:1881-1884" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/register_api.py#L1881-L1884" />
+
+The system implements an alternative discovery mechanism using WandB for distributed miner information:
+
+| Validation Check | Function | Purpose |
+|------------------|----------|---------|
+| Age Verification | `miner_is_older_than()` | Ensures miners have been active for 48+ hours |
+| PoG Validation | `miner_pog_ok()` | Confirms recent Proof-of-GPU completion within 2.5 hours |
+| Penalty Check | `get_penalized_hotkeys_checklist()` | Excludes blacklisted or penalized miners |
+| Network Presence | `metagraph.axons` lookup | Verifies miner is active on network |
+
+## Allocation Strategies
+
+The system implements two primary allocation strategies: specification-based allocation and hotkey-specific allocation, each optimized for different use cases.
+
+### Specification-Based Allocation
+
+```mermaid
+flowchart TD
+    AllocateSpec["_allocate_container()"] --> BuildDevReq["Build device_requirement{}"]
+    BuildDevReq --> FindCandidates["select_allocate_miners_hotkey()"]
+    FindCandidates --> CheckAvailable["dendrite(checking:True)"]
+    CheckAvailable --> ScoreSort["torch.ones_like(metagraph.S)"]
+    ScoreSort --> TryAllocation["Loop through sorted_hotkeys"]
+    TryAllocation --> SendAllocate["dendrite(Allocate(checking:False))"]
+    SendAllocate --> ValidateResponse["Check response.status"]
+    ValidateResponse --> Success["Return allocation info"]
+    ValidateResponse --> NextCandidate["Try next candidate"]
+    NextCandidate --> TryAllocation
+```
+
+**Specification-Based Allocation Flow**
+
+Sources: <SourceLink text="neurons/register_api.py:2733-2805" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/register_api.py#L2733-L2805" />
+
+The specification-based strategy processes `DeviceRequirement` objects containing:
+- CPU count requirements
+- GPU type and memory specifications  
+- RAM and storage capacity needs
+- Timeline duration for allocation
+
+### Hotkey-Specific Allocation
+
+```mermaid
+flowchart TD
+    AllocateHotkey["_allocate_container_hotkey()"] --> FindAxon["Locate axon by hotkey"]
+    FindAxon --> SetDefaults["Set default device_requirement{}"]
+    SetDefaults --> SetBaseImage["docker_requirement.base_image"]
+    SetBaseImage --> DirectAllocate["dendrite(Allocate())"]
+    DirectAllocate --> ValidateResponse["Check response.status"]
+    ValidateResponse --> ReturnInfo["Return allocation + miner_version"]
+    ValidateResponse --> ReturnError["Return error message"]
+```
+
+**Hotkey-Specific Allocation Flow**
+
+Sources: <SourceLink text="neurons/register_api.py:2807-2889" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/register_api.py#L2807-L2889" />
+
+This strategy targets specific miners by hotkey, bypassing the discovery phase and applying default resource requirements with configurable Docker base images.
+
+## Health Monitoring System
+
+The health monitoring system continuously tracks allocated resources and manages their lifecycle through automated checks and notifications.
+
+### Allocation Health Check Process
+
+```mermaid
+flowchart TD
+    CheckTask["_check_allocation()"] --> QueryDB["SELECT * FROM allocation"]
+    QueryDB --> LoopAllocations["For each allocation"]
+    LoopAllocations --> ValidateHotkey["Check hotkey in metagraph"]
+    ValidateHotkey --> HealthCheck["dendrite_check(Allocate(checking:True))"]
+    HealthCheck --> EvaluateResponse["Evaluate response"]
+    
+    EvaluateResponse --> Online["response.status :: False"]
+    EvaluateResponse --> Offline["No response or timeout"]
+    
+    Online --> NotifyOnline["_notify_allocation_status(ONLINE)"]
+    Online --> RemoveFromCheck["Remove from checking_allocated[]"]
+    
+    Offline --> AddToCheck["Add to checking_allocated[]"]
+    Offline --> NotifyOffline["_notify_allocation_status(OFFLINE)"]
+    Offline --> CountChecks["checking_allocated.count(hotkey)"]
+    
+    CountChecks --> MaxReached["count >: ALLOCATE_CHECK_COUNT"]
+    MaxReached --> Deallocate["update_allocation_db(False)"]
+    Deallocate --> NotifyDealloc["_notify_allocation_status(DEALLOCATION)"]
+```
+
+**Health Monitoring Process Flow**
+
+Sources: <SourceLink text="neurons/register_api.py:3002-3101" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/register_api.py#L3002-L3101" />
+
+The health monitoring system operates with the following parameters:
+
+| Parameter | Value | Purpose |
+|-----------|-------|---------|
+| `ALLOCATE_CHECK_PERIOD` | 180 seconds | Interval between health checks |
+| `ALLOCATE_CHECK_COUNT` | 20 | Maximum failed checks before deallocation |
+| Health Check Timeout | 10 seconds | Maximum wait time for miner response |
+
+### Status Transition Management
+
+The system tracks miner status transitions and maintains allocation state through the `checking_allocated` list and database updates.
+
+Sources: <SourceLink text="neurons/register_api.py:3039-3081" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/register_api.py#L3039-L3081" />
+
+## State Management
+
+The Resource Management system maintains both local and distributed state through SQLite database operations and WandB synchronization.
+
+### Database State Operations
+
+```mermaid
+flowchart TD
+    AllocDB["allocation table"] --> UpdateLocal["update_allocation_db()"]
+    UpdateLocal --> ExtractHotkeys["Extract hotkey_list[]"]
+    ExtractHotkeys --> UpdateWandB["_update_allocation_wandb()"]
+    UpdateWandB --> WandbSync["wandb.update_allocated_hotkeys()"]
+    
+    QueryState["List operations"] --> QueryDB["SELECT hotkey, details FROM allocation"]
+    QueryDB --> ParseJSON["json.loads(details)"]
+    ParseJSON --> BuildAllocation["Build Allocation objects"]
+    
+    HealthCheck["Health monitoring"] --> StateUpdate["Allocation state changes"]
+    StateUpdate --> NotifyRetry["notify_retry_table[]"]
+    StateUpdate --> UpdateLocal
+```
+
+**State Management Architecture**
+
+Sources: <SourceLink text="neurons/register_api.py:2891-2919" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/register_api.py#L2891-L2919" />, <SourceLink text="neurons/register_api.py:1346-1419" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/register_api.py#L1346-L1419" />
+
+### Distributed State Synchronization
+
+The system maintains consistency across validators through WandB-based state sharing:
+
+| State Component | Storage | Synchronization Method |
+|-----------------|---------|----------------------|
+| Active Allocations | SQLite `allocation` table | `_update_allocation_wandb()` |
+| Allocated Hotkeys | WandB runs | `wandb.update_allocated_hotkeys()` |
+| Retry Notifications | In-memory `notify_retry_table` | Periodic retry processing |
+
+Sources: <SourceLink text="neurons/register_api.py:2915-2919" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/register_api.py#L2915-L2919" />
+
+## Notification System
+
+The notification system provides external webhook integration for allocation lifecycle events and status changes.
+
+### Notification Event Types
+
+```mermaid
+flowchart TD
+    EventTrigger["Allocation Event"] --> EventType{"Event Type"}
+    
+    EventType --> Deallocation["DEALLOCATION"]
+    EventType --> Online["ONLINE"] 
+    EventType --> Offline["OFFLINE"]
+    
+    Deallocation --> BuildDeallocationMsg["Build deallocation message"]
+    Online --> BuildStatusMsg["Build status change message"]
+    Offline --> BuildStatusMsg
+    
+    BuildDeallocationMsg --> DeallocationURL["deallocation_notify_url"]
+    BuildStatusMsg --> StatusURL["status_notify_url"]
+    
+    DeallocationURL --> SignAndSend["HMAC signature + POST"]
+    StatusURL --> SignAndSend
+    
+    SignAndSend --> RetryLogic["Retry up to MAX_NOTIFY_RETRY"]
+    RetryLogic --> Success["200/201 response"]
+    RetryLogic --> AddToRetryTable["Add to notify_retry_table[]"]
+```
+
+**Notification System Flow**
+
+Sources: <SourceLink text="neurons/register_api.py:2940-3000" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/register_api.py#L2940-L3000" />
+
+### Notification Configuration
+
+The notification system operates with these key parameters:
+
+| Parameter | Value | Purpose |
+|-----------|-------|---------|
+| `MAX_NOTIFY_RETRY` | 3 | Maximum notification attempts |
+| `NOTIFY_RETRY_PERIOD` | 15 seconds | Delay between retry attempts |
+| Webhook Signature | HMAC-SHA256 | Request authentication |
+| SSL Certificates | Required | Secure communication |
+
+Sources: <SourceLink text="neurons/register_api.py:92-93" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/register_api.py#L92-L93" />, <SourceLink text="neurons/register_api.py:2972-2976" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/register_api.py#L2972-L2976" />
+
+## Data Models and Configuration
+
+The Resource Management system uses several key data models and configuration parameters to define resource requirements and allocation responses.
+
+### Core Data Models
+
+```mermaid
+classDiagram
+    class DeviceRequirement {
+        +int cpu_count
+        +str gpu_type
+        +int gpu_size
+        +int ram
+        +int hard_disk
+        +int timeline
+    }
+    
+    class Allocation {
+        +str resource
+        +str hotkey
+        +str regkey
+        +str ssh_ip
+        +int ssh_port
+        +str ssh_username
+        +str ssh_password
+        +str ssh_command
+        +str ssh_key
+        +str uuid_key
+        +int miner_version
+    }
+    
+    class ResourceQuery {
+        +str gpu_name
+        +int cpu_count_min
+        +int cpu_count_max
+        +float gpu_capacity_min
+        +float gpu_capacity_max
+        +float hard_disk_total_min
+        +float hard_disk_total_max
+        +float ram_total_min
+        +float ram_total_max
+    }
+    
+    class DockerRequirement {
+        +str base_image
+        +str ssh_key
+        +str volume_path
+        +str dockerfile
+    }
+    
+    DeviceRequirement --> Allocation : "Generates"
+    ResourceQuery --> Allocation : "Filters"
+    DockerRequirement --> Allocation : "Configures"
+```
+
+**Resource Management Data Models**
+
+Sources: <SourceLink text="neurons/register_api.py:147-175" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/register_api.py#L147-L175" />, <SourceLink text="neurons/register_api.py:156-167" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/register_api.py#L156-L167" />, <SourceLink text="neurons/register_api.py:204-213" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/register_api.py#L204-L213" />
+
+### System Configuration Constants
+
+The system behavior is controlled through key configuration constants:
+
+| Constant | Value | Purpose |
+|----------|-------|---------|
+| `DATA_SYNC_PERIOD` | 600 seconds | Metagraph refresh interval |
+| `ALLOCATE_CHECK_PERIOD` | 180 seconds | Health check frequency |
+| `ALLOCATE_CHECK_COUNT` | 20 | Max timeout count before deallocation |
+| `MAX_ALLOCATION_RETRY` | 3 | Maximum allocation attempt retries |
+| `VALID_VALIDATOR_HOTKEYS` | Array of 19 hotkeys | Authorized validator addresses |
+
+Sources: <SourceLink text="neurons/register_api.py:85-116" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/register_api.py#L85-L116" />
+
+The Resource Management system integrates these components to provide robust, scalable compute resource allocation with comprehensive monitoring and state management capabilities.

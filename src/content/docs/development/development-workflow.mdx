@@ -1,0 +1,310 @@
+---
+
+title: "Development Workflow"
+
+---
+
+
+
+import CollapsibleAside from '@components/CollapsibleAside.astro';
+
+import SourceLink from '@components/SourceLink.astro';
+
+
+
+<CollapsibleAside title="Relevant Source Files">
+
+  <SourceLink text=".github/workflows/pre-commit.yml" href="https://github.com/neuralinternet/SN27/blob/6261c454/.github/workflows/pre-commit.yml" />
+
+  <SourceLink text=".pre-commit-config.yaml" href="https://github.com/neuralinternet/SN27/blob/6261c454/.pre-commit-config.yaml" />
+
+  <SourceLink text="scripts/check-branch-name.sh" href="https://github.com/neuralinternet/SN27/blob/6261c454/scripts/check-branch-name.sh" />
+
+  <SourceLink text="scripts/check-current-branch.sh" href="https://github.com/neuralinternet/SN27/blob/6261c454/scripts/check-current-branch.sh" />
+
+</CollapsibleAside>
+
+
+
+
+
+
+
+
+This document covers the development workflow, code quality enforcement, and automated testing infrastructure for the NI Compute Subnet project. It details the pre-commit hooks system, branch naming conventions, continuous integration pipeline, and dependency management processes that ensure code quality and consistency across the project.
+
+For information about project structure and organization, see [Project Structure](/development/project-structure#9.2). For details about CLI tools used in development, see [CLI Tools](/cli-tools#8).
+
+## Pre-commit Hooks System
+
+The project uses a comprehensive pre-commit hooks system to enforce code quality standards before commits are made. The configuration is defined in <SourceLink text=".pre-commit-config.yaml:1-64" href="https://github.com/neuralinternet/SN27/blob/6261c454/.pre-commit-config.yaml#L1-L64" /> and includes multiple stages of validation.
+
+### Hook Configuration
+
+The pre-commit system includes the following hook categories:
+
+| Hook Category | Purpose | Stage |
+|---------------|---------|-------|
+| Code Formatting | Trailing whitespace and end-of-file fixes | `pre-commit`, `manual` |
+| Commit Validation | Conventional commit message format | `commit-msg` |
+| Branch Validation | Branch naming convention enforcement | `pre-commit`, `pre-push`, `manual` |
+| Dependency Management | Requirements file synchronization | `pre-commit`, `manual` |
+| Testing | Automated test execution | `pre-commit`, `manual` |
+
+### Pre-commit Hook Flow
+
+```mermaid
+flowchart TD
+    DEV["Developer makes commit"] --> PRECOMMIT["pre-commit hooks triggered"]
+    
+    PRECOMMIT --> WHITESPACE["trailing-whitespace hook"]
+    PRECOMMIT --> ENDFILE["end-of-file-fixer hook"]
+    PRECOMMIT --> BRANCH["check-branch-name hook"]
+    PRECOMMIT --> PIPCOMPILE["pip-compile hooks"]
+    PRECOMMIT --> PYTEST["run-pytest hook"]
+    
+    WHITESPACE --> PASS1{Passes?}
+    ENDFILE --> PASS2{Passes?}
+    BRANCH --> BRANCHSCRIPT["./scripts/check-current-branch.sh"]
+    BRANCHSCRIPT --> PASS3{Passes?}
+    PIPCOMPILE --> REQSYNC["Requirements sync"]
+    REQSYNC --> PASS4{Passes?}
+    PYTEST --> TESTRUN["pytest --alluredir allure-results"]
+    TESTRUN --> PASS5{Passes?}
+    
+    PASS1 -->|No| FAIL["Commit blocked"]
+    PASS2 -->|No| FAIL
+    PASS3 -->|No| FAIL
+    PASS4 -->|No| FAIL
+    PASS5 -->|No| FAIL
+    
+    PASS1 -->|Yes| SUCCESS["All hooks pass"]
+    PASS2 -->|Yes| SUCCESS
+    PASS3 -->|Yes| SUCCESS
+    PASS4 -->|Yes| SUCCESS
+    PASS5 -->|Yes| SUCCESS
+    
+    SUCCESS --> COMMIT["Commit allowed"]
+    FAIL --> ABORT["Fix issues and retry"]
+```
+
+**Sources:** <SourceLink text=".pre-commit-config.yaml:1-64" href="https://github.com/neuralinternet/SN27/blob/6261c454/.pre-commit-config.yaml#L1-L64" />, <SourceLink text="scripts/check-current-branch.sh:1-7" href="https://github.com/neuralinternet/SN27/blob/6261c454/scripts/check-current-branch.sh#L1-L7" />
+
+## Branch Naming Conventions
+
+The project enforces strict branch naming conventions through the `check-branch-name.sh` script, which validates branch names against predefined patterns.
+
+### Allowed Branch Patterns
+
+The branch validation system supports the following patterns:
+
+| Branch Type | Pattern | Example |
+|-------------|---------|---------|
+| Feature | `feat/CSN-XXXX-description` | `feat/CSN-1234-add-gpu-validation` |  
+| Bug Fix | `fix/CSN-XXXX-description` | `fix/CSN-5678-memory-leak-issue` |
+| Hotfix | `hotfix/vX.Y.Z-CSN-XXXX-description` | `hotfix/v1.2.3-CSN-9999-critical-fix` |
+| Release | `release/vX.Y.Z` | `release/v2.1.0` |
+| Chore | `chore/CSN-XXXX-description` | `chore/CSN-1111-update-dependencies` |
+
+### Branch Validation Logic
+
+```mermaid
+flowchart TD
+    BRANCH_INPUT["Branch name input"] --> EMPTY_CHECK{Empty or HEAD?}
+    EMPTY_CHECK -->|Yes| ERROR1["❌ Unable to determine branch name"]
+    
+    EMPTY_CHECK -->|No| SPECIAL_CHECK{dev or main branch?}
+    SPECIAL_CHECK -->|Yes| ALLOW1["✅ Branch allowed without validation"]
+    
+    SPECIAL_CHECK -->|No| RELEASE_CHECK{Starts with release/?}
+    RELEASE_CHECK -->|Yes| RELEASE_PATTERN["Check release/vX.Y.Z pattern"]
+    RELEASE_PATTERN --> RELEASE_VALID{Valid?}
+    RELEASE_VALID -->|Yes| ALLOW2["✅ Valid release branch"]
+    RELEASE_VALID -->|No| ERROR2["❌ Invalid release format"]
+    
+    RELEASE_CHECK -->|No| HOTFIX_CHECK{Starts with hotfix/?}
+    HOTFIX_CHECK -->|Yes| HOTFIX_PATTERN["Check hotfix/vX.Y.Z-CSN-XXXX-desc"]
+    HOTFIX_PATTERN --> HOTFIX_VALID{Valid?}
+    HOTFIX_VALID -->|Yes| ALLOW3["✅ Valid hotfix branch"]
+    HOTFIX_VALID -->|No| ERROR3["❌ Invalid hotfix format"]
+    
+    HOTFIX_CHECK -->|No| PREFIX_CHECK["Check allowed prefixes"]
+    PREFIX_CHECK --> PREFIX_VALID{Valid prefix?}
+    PREFIX_VALID -->|No| ERROR4["❌ Invalid prefix"]
+    
+    PREFIX_VALID -->|Yes| JIRA_CHECK["Extract JIRA ticket CSN-XXXX"]
+    JIRA_CHECK --> JIRA_VALID{JIRA found?}
+    JIRA_VALID -->|No| ERROR5["❌ Missing JIRA ticket"]
+    
+    JIRA_VALID -->|Yes| DESC_CHECK["Check description format"]
+    DESC_CHECK --> KEBAB_CASE{Lowercase kebab-case?}
+    KEBAB_CASE -->|No| ERROR6["❌ Invalid description format"]
+    KEBAB_CASE -->|Yes| ALLOW4["✅ Valid branch name"]
+    
+    ERROR1 --> EXIT1["exit 1"]
+    ERROR2 --> EXIT1
+    ERROR3 --> EXIT1
+    ERROR4 --> EXIT1
+    ERROR5 --> EXIT1
+    ERROR6 --> EXIT1
+    
+    ALLOW1 --> EXIT0["exit 0"]
+    ALLOW2 --> EXIT0
+    ALLOW3 --> EXIT0
+    ALLOW4 --> EXIT0
+```
+
+**Sources:** <SourceLink text="scripts/check-branch-name.sh:1-114" href="https://github.com/neuralinternet/SN27/blob/6261c454/scripts/check-branch-name.sh#L1-L114" />, <SourceLink text=".pre-commit-config.yaml:19-26" href="https://github.com/neuralinternet/SN27/blob/6261c454/.pre-commit-config.yaml#L19-L26" />
+
+### Branch Name Validation Implementation
+
+The validation logic is implemented in <SourceLink text="scripts/check-branch-name.sh:1-114" href="https://github.com/neuralinternet/SN27/blob/6261c454/scripts/check-branch-name.sh#L1-L114" /> with the following key components:
+
+- **Allowed Prefixes**: <SourceLink text="scripts/check-branch-name.sh:4" href="https://github.com/neuralinternet/SN27/blob/6261c454/scripts/check-branch-name.sh#L4" /> defines `feat|fix|hotfix|chore|refactor|test|spike|prototype|release|docs`
+- **JIRA Pattern**: <SourceLink text="scripts/check-branch-name.sh:7" href="https://github.com/neuralinternet/SN27/blob/6261c454/scripts/check-branch-name.sh#L7" /> requires `CSN-[0-9]+` format
+- **Release Pattern**: <SourceLink text="scripts/check-branch-name.sh:10" href="https://github.com/neuralinternet/SN27/blob/6261c454/scripts/check-branch-name.sh#L10" /> validates `release/v[0-9]+\.[0-9]+\.[0-9]+(-[a-z0-9]+)?`
+- **Hotfix Pattern**: <SourceLink text="scripts/check-branch-name.sh:16" href="https://github.com/neuralinternet/SN27/blob/6261c454/scripts/check-branch-name.sh#L16" /> validates `hotfix/v[0-9]+\.[0-9]+\.[0-9]+`
+
+**Sources:** <SourceLink text="scripts/check-branch-name.sh:4-16" href="https://github.com/neuralinternet/SN27/blob/6261c454/scripts/check-branch-name.sh#L4-L16" />
+
+## Code Quality Enforcement
+
+The development workflow enforces code quality through multiple automated checks that run at different stages of the development process.
+
+### Quality Check Pipeline
+
+```mermaid
+graph LR
+    subgraph "Pre-commit Stage"
+        PC_WHITESPACE["trailing-whitespace"]
+        PC_EOF["end-of-file-fixer"]
+        PC_BRANCH["check-branch-name"]
+        PC_DEPS["pip-compile"]
+        PC_TEST["run-pytest"]
+    end
+    
+    subgraph "Commit Message Stage"
+        CM_LINT["commitlint"]
+        CM_CONV["@commitlint/config-conventional"]
+    end
+    
+    subgraph "Post-checkout Stage"
+        PCO_BRANCH["post-checkout-check"]
+    end
+    
+    subgraph "CI/CD Stage"
+        CI_PRECOMMIT["pre-commit/action@v3.0.1"]
+        CI_PYTHON["Python 3.12 setup"]
+        CI_DEPS["Install dependencies"]
+    end
+    
+    PC_WHITESPACE --> COMMIT_READY
+    PC_EOF --> COMMIT_READY
+    PC_BRANCH --> COMMIT_READY
+    PC_DEPS --> COMMIT_READY
+    PC_TEST --> COMMIT_READY
+    
+    COMMIT_READY --> CM_LINT
+    CM_LINT --> CM_CONV
+    CM_CONV --> COMMITTED
+    
+    COMMITTED --> PCO_BRANCH
+    PCO_BRANCH --> CHECKOUT_COMPLETE
+    
+    CHECKOUT_COMPLETE --> CI_PYTHON
+    CI_PYTHON --> CI_DEPS
+    CI_DEPS --> CI_PRECOMMIT
+    CI_PRECOMMIT --> PIPELINE_SUCCESS
+```
+
+**Sources:** <SourceLink text=".pre-commit-config.yaml:1-64" href="https://github.com/neuralinternet/SN27/blob/6261c454/.pre-commit-config.yaml#L1-L64" />, <SourceLink text=".github/workflows/pre-commit.yml:1-22" href="https://github.com/neuralinternet/SN27/blob/6261c454/.github/workflows/pre-commit.yml#L1-L22" />
+
+### Testing Integration
+
+The pre-commit system includes automated test execution using `pytest` with Allure reporting:
+
+- **Test Command**: <SourceLink text=".pre-commit-config.yaml:58" href="https://github.com/neuralinternet/SN27/blob/6261c454/.pre-commit-config.yaml#L58" /> executes `python -m pytest --alluredir allure-results`
+- **Test Stage**: <SourceLink text=".pre-commit-config.yaml:60" href="https://github.com/neuralinternet/SN27/blob/6261c454/.pre-commit-config.yaml#L60" /> runs on `pre-commit` and `manual` stages
+- **Always Run**: <SourceLink text=".pre-commit-config.yaml:61" href="https://github.com/neuralinternet/SN27/blob/6261c454/.pre-commit-config.yaml#L61" /> ensures tests run regardless of file changes
+- **No Filenames**: <SourceLink text=".pre-commit-config.yaml:63" href="https://github.com/neuralinternet/SN27/blob/6261c454/.pre-commit-config.yaml#L63" /> prevents passing filenames to pytest
+
+**Sources:** <SourceLink text=".pre-commit-config.yaml:56-63" href="https://github.com/neuralinternet/SN27/blob/6261c454/.pre-commit-config.yaml#L56-L63" />
+
+## Continuous Integration Pipeline
+
+The project uses GitHub Actions for continuous integration, with the workflow defined in <SourceLink text=".github/workflows/pre-commit.yml:1-22" href="https://github.com/neuralinternet/SN27/blob/6261c454/.github/workflows/pre-commit.yml#L1-L22" />.
+
+### CI/CD Workflow Configuration
+
+| Configuration | Value | Purpose |
+|---------------|-------|---------|
+| **Trigger Events** | `pull_request`, `push` to `dev`/`main` | Automated validation on key events |
+| **Runner** | `ubuntu-latest` | Consistent Linux environment |
+| **Python Version** | `3.12` | Latest stable Python version |
+| **Cache Strategy** | `pip` with `pyproject.toml`, `requirements*.txt` | Dependency caching for performance |
+
+### CI Pipeline Steps
+
+```mermaid
+sequenceDiagram
+    participant TRIGGER as "PR/Push Event"
+    participant RUNNER as "ubuntu-latest Runner"
+    participant PYTHON as "Python 3.12 Setup"
+    participant CACHE as "Pip Cache"
+    participant DEPS as "Dependencies"
+    participant PRECOMMIT as "pre-commit/action"
+    
+    TRIGGER->>RUNNER: "Start CI job"
+    RUNNER->>PYTHON: "Setup Python 3.12"
+    PYTHON->>CACHE: "Check pip cache"
+    CACHE->>DEPS: "Install -e .[dev] -r requirements*.txt"
+    DEPS->>PRECOMMIT: "Run pre-commit hooks"
+    PRECOMMIT->>RUNNER: "Report results"
+    RUNNER->>TRIGGER: "Complete CI job"
+```
+
+**Sources:** <SourceLink text=".github/workflows/pre-commit.yml:8-22" href="https://github.com/neuralinternet/SN27/blob/6261c454/.github/workflows/pre-commit.yml#L8-L22" />
+
+## Dependency Management
+
+The project uses `pip-tools` for dependency management with automated synchronization through pre-commit hooks.
+
+### Requirements Compilation
+
+The dependency management system includes two compilation targets:
+
+- **Production Requirements**: <SourceLink text=".pre-commit-config.yaml:40" href="https://github.com/neuralinternet/SN27/blob/6261c454/.pre-commit-config.yaml#L40" /> compiles `pyproject.toml` to `requirements.txt`
+- **Development Requirements**: <SourceLink text=".pre-commit-config.yaml:49" href="https://github.com/neuralinternet/SN27/blob/6261c454/.pre-commit-config.yaml#L49" /> compiles with `--extra dev` to `requirements-dev.txt`
+
+### Dependency Compilation Flow
+
+```mermaid
+flowchart TD
+    PYPROJECT["pyproject.toml changes"] --> PRECOMMIT_TRIGGER["pre-commit triggered"]
+    
+    PRECOMMIT_TRIGGER --> PROD_COMPILE["pip-compile hook"]
+    PRECOMMIT_TRIGGER --> DEV_COMPILE["pip-compile-dev hook"]
+    
+    PROD_COMPILE --> PROD_CMD["python -m piptools compile --quiet -o requirements.txt"]
+    DEV_COMPILE --> DEV_CMD["python -m piptools compile --quiet --extra dev -o requirements-dev.txt"]
+    
+    PROD_CMD --> REQ_FILE["requirements.txt updated"]
+    DEV_CMD --> REQ_DEV_FILE["requirements-dev.txt updated"]
+    
+    REQ_FILE --> COMMIT_READY["Dependencies synchronized"]
+    REQ_DEV_FILE --> COMMIT_READY
+    
+    COMMIT_READY --> COMMIT_SUCCESS["Commit proceeds"]
+```
+
+**Sources:** <SourceLink text=".pre-commit-config.yaml:38-53" href="https://github.com/neuralinternet/SN27/blob/6261c454/.pre-commit-config.yaml#L38-L53" />
+
+### Installation Command Sequence
+
+The CI/CD pipeline installs dependencies in the following order as defined in <SourceLink text=".github/workflows/pre-commit.yml:20" href="https://github.com/neuralinternet/SN27/blob/6261c454/.github/workflows/pre-commit.yml#L20" />:
+
+1. `pip install -e .[dev]` - Install package in development mode with dev extras
+2. `-r requirements.txt` - Install production dependencies
+3. `-r requirements-dev.txt` - Install development dependencies
+
+**Sources:** <SourceLink text=".github/workflows/pre-commit.yml:20" href="https://github.com/neuralinternet/SN27/blob/6261c454/.github/workflows/pre-commit.yml#L20" />

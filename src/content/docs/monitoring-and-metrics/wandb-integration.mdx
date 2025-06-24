@@ -1,0 +1,330 @@
+---
+
+title: "WandB Integration"
+
+---
+
+
+
+import CollapsibleAside from '@components/CollapsibleAside.astro';
+
+import SourceLink from '@components/SourceLink.astro';
+
+
+
+<CollapsibleAside title="Relevant Source Files">
+
+  <SourceLink text="compute/wandb/wandb.py" href="https://github.com/neuralinternet/SN27/blob/6261c454/compute/wandb/wandb.py" />
+
+</CollapsibleAside>
+
+
+
+
+
+
+
+
+The WandB Integration system provides distributed state management and experiment tracking across the NI Compute Subnet using Weights & Biases (WandB) as a centralized data store. This system enables validators and miners to share critical network state including hardware specifications, allocation status, performance metrics, and penalty information in a verifiable and tamper-resistant manner.
+
+This document covers the technical implementation of WandB integration for network-wide data synchronization. For Prometheus-based local metrics collection, see [Prometheus Metrics](/monitoring-and-metrics/prometheus-metrics#6.2).
+
+## Architecture Overview
+
+The WandB integration operates as a distributed state management layer that sits between local database storage and network-wide coordination. Each validator and miner maintains its own WandB run that serves as both a data publication mechanism and a verification layer through cryptographic signatures.
+
+```mermaid
+graph TB
+    subgraph "Local Systems"
+        V1["Validator Instance"]
+        V2["Validator Instance"]
+        M1["Miner Instance"]
+        M2["Miner Instance"]
+        DB1["ComputeDb (Local)"]
+        DB2["ComputeDb (Local)"]
+    end
+    
+    subgraph "WandB Cloud Platform"
+        PROJECT["opencompute Project"]
+        VRUN1["validator-{hotkey} Run"]
+        VRUN2["validator-{hotkey} Run"]
+        MRUN1["miner-{hotkey} Run"]
+        MRUN2["miner-{hotkey} Run"]
+    end
+    
+    subgraph "Shared Network State"
+        ALLOCATED["allocated_hotkeys"]
+        PENALIZED["penalized_hotkeys"]
+        SPECS["miner_specs"]
+        STATS["validator_stats"]
+    end
+    
+    V1 -->|"ComputeWandb.update_allocated_hotkeys()"| VRUN1
+    V2 -->|"ComputeWandb.update_stats()"| VRUN2
+    M1 -->|"ComputeWandb.update_specs()"| MRUN1
+    M2 -->|"ComputeWandb.update_allocated()"| MRUN2
+    
+    V1 -->|"write_stats()"| DB1
+    M1 -->|"save_run_id()"| DB2
+    
+    VRUN1 --> ALLOCATED
+    VRUN2 --> STATS
+    MRUN1 --> SPECS
+    MRUN2 --> ALLOCATED
+    
+    V1 -.->|"get_allocated_hotkeys()"| ALLOCATED
+    V1 -.->|"get_miner_specs()"| SPECS
+    V2 -.->|"get_stats_allocated()"| STATS
+```
+
+**Sources:** <SourceLink text="compute/wandb/wandb.py:1-648" href="https://github.com/neuralinternet/SN27/blob/6261c454/compute/wandb/wandb.py#L1-L648" />
+
+## Core Components
+
+### ComputeWandb Class
+
+The `ComputeWandb` class serves as the primary interface for all WandB operations within the compute subnet. It manages authentication, run lifecycle, data synchronization, and cryptographic verification.
+
+```mermaid
+classDiagram
+    class ComputeWandb {
+        +run: wandb.Run
+        +config: bt.config
+        +wallet: bt.wallet
+        +hotkey: str
+        +role: str
+        +db: ComputeDb
+        +api: wandb.Api
+        +run_id: str
+        
+        +__init__(config, wallet, role)
+        +update_config()
+        +save_run_id(hotkey, run_id)
+        +get_run_id(hotkey)
+        +update_specs()
+        +log_chain_data(data)
+        +update_allocated(allocated)
+        +update_stats(stats)
+        +update_allocated_hotkeys(hotkey_list)
+        +update_penalized_hotkeys(hotkey_list)
+        +get_allocated_hotkeys(valid_validators, flag)
+        +get_stats_allocated(valid_validators, flag)
+        +get_miner_specs(queryable_uids)
+        +sign_run()
+        +verify_run(run)
+        +sync_allocated(hotkey)
+    }
+    
+    class ComputeDb {
+        +get_cursor()
+        +conn: Connection
+    }
+    
+    class wandb_Api {
+        +runs()
+        +project()
+        +flush()
+    }
+    
+    ComputeWandb --> ComputeDb
+    ComputeWandb --> wandb_Api
+```
+
+**Sources:** <SourceLink text="compute/wandb/wandb.py:19-648" href="https://github.com/neuralinternet/SN27/blob/6261c454/compute/wandb/wandb.py#L19-L648" />
+
+### Authentication and Run Management
+
+The system manages WandB authentication through API keys and run persistence through local database storage. Each hotkey maintains a single persistent run across restarts.
+
+| Configuration Parameter | Value | Purpose |
+|------------------------|-------|---------|
+| `PUBLIC_WANDB_NAME` | `"opencompute"` | Project name |
+| `PUBLIC_WANDB_ENTITY` | `"neuralinternet"` | Organization entity |
+| Run naming pattern | `"{role}-{hotkey}"` | Unique run identification |
+
+The authentication flow handles multiple scenarios:
+
+```mermaid
+flowchart TD
+    START["ComputeWandb.__init__()"]
+    CHECK_KEY{"WANDB_API_KEY exists?"}
+    CHECK_NETRC{"~/.netrc exists?"}
+    ERROR["Raise ValueError"]
+    
+    GET_RUN_ID["get_run_id(hotkey)"]
+    RUN_EXISTS{"run_id found?"}
+    
+    QUERY_WANDB["Query WandB for existing runs"]
+    RUNS_FOUND{"runs.length >= 1?"}
+    
+    CREATE_RUN["wandb.init() new run"]
+    SAVE_RUN["save_run_id()"]
+    
+    RESUME_RUN["wandb.init(id:run_id, resume:'allow')"]
+    UPDATE_CONFIG["update_config()"]
+    SIGN["sign_run()"]
+    
+    START --> CHECK_KEY
+    CHECK_KEY -->|No| CHECK_NETRC
+    CHECK_KEY -->|Yes| GET_RUN_ID
+    CHECK_NETRC -->|No| ERROR
+    CHECK_NETRC -->|Yes| GET_RUN_ID
+    
+    GET_RUN_ID --> RUN_EXISTS
+    RUN_EXISTS -->|No| QUERY_WANDB
+    RUN_EXISTS -->|Yes| RESUME_RUN
+    
+    QUERY_WANDB --> RUNS_FOUND
+    RUNS_FOUND -->|No| CREATE_RUN
+    RUNS_FOUND -->|Yes| SAVE_RUN
+    
+    CREATE_RUN --> SAVE_RUN
+    SAVE_RUN --> RESUME_RUN
+    RESUME_RUN --> UPDATE_CONFIG
+    UPDATE_CONFIG --> SIGN
+```
+
+**Sources:** <SourceLink text="compute/wandb/wandb.py:22-88" href="https://github.com/neuralinternet/SN27/blob/6261c454/compute/wandb/wandb.py#L22-L88" />, <SourceLink text="compute/wandb/wandb.py:109-138" href="https://github.com/neuralinternet/SN27/blob/6261c454/compute/wandb/wandb.py#L109-L138" />
+
+## Data Synchronization Patterns
+
+### Validator Data Flow
+
+Validators publish aggregated network statistics and maintain lists of allocated and penalized hotkeys. The synchronization ensures consistency between local database state and distributed WandB state.
+
+```mermaid
+sequenceDiagram
+    participant VDB as "ComputeDb (Validator)"
+    participant CW as "ComputeWandb"
+    participant WB as "WandB API"
+    participant NET as "Network State"
+    
+    Note over VDB,NET: Stats Update Cycle
+    VDB->>CW: retrieve_stats(db)
+    CW->>CW: update_allocated_hotkeys(hotkey_list)
+    CW->>VDB: write_stats(db, updated_stats)
+    CW->>WB: run.config.update(allocated_hotkeys, stats)
+    CW->>WB: run.log(allocated_hotkeys)
+    CW->>CW: sign_run()
+    
+    Note over VDB,NET: Network Query Cycle
+    CW->>WB: api.runs(filters=validator_runs)
+    WB-->>CW: validator_run_configs
+    CW->>CW: verify_run(run) for each
+    CW-->>NET: aggregated_allocated_hotkeys
+    CW-->>NET: aggregated_stats
+```
+
+**Sources:** <SourceLink text="compute/wandb/wandb.py:198-230" href="https://github.com/neuralinternet/SN27/blob/6261c454/compute/wandb/wandb.py#L198-L230" />, <SourceLink text="compute/wandb/wandb.py:291-332" href="https://github.com/neuralinternet/SN27/blob/6261c454/compute/wandb/wandb.py#L291-L332" />, <SourceLink text="compute/wandb/wandb.py:334-450" href="https://github.com/neuralinternet/SN27/blob/6261c454/compute/wandb/wandb.py#L334-L450" />
+
+### Miner Data Flow
+
+Miners publish hardware specifications and allocation status, enabling validators to discover available resources and verify capabilities.
+
+```mermaid
+sequenceDiagram
+    participant M as "Miner Process"
+    participant CW as "ComputeWandb"
+    participant WB as "WandB API"
+    participant V as "Validator Query"
+    
+    Note over M,V: Specs Publication
+    M->>CW: update_specs()
+    CW->>CW: get_perf_info(encrypted=False)
+    CW->>WB: run.config.update(specs)
+    CW->>CW: sign_run()
+    
+    Note over M,V: Allocation Status Update
+    M->>CW: update_allocated(validator_hotkey)
+    CW->>WB: run.config.update(allocated)
+    CW->>CW: sign_run()
+    
+    Note over M,V: Validator Discovery
+    V->>WB: api.runs(filters=miner_runs)
+    WB-->>V: miner_run_configs
+    V->>V: verify_run(run) for each
+    V-->>V: hotkey_to_specs_mapping
+```
+
+**Sources:** <SourceLink text="compute/wandb/wandb.py:140-159" href="https://github.com/neuralinternet/SN27/blob/6261c454/compute/wandb/wandb.py#L140-L159" />, <SourceLink text="compute/wandb/wandb.py:168-184" href="https://github.com/neuralinternet/SN27/blob/6261c454/compute/wandb/wandb.py#L168-L184" />, <SourceLink text="compute/wandb/wandb.py:540-574" href="https://github.com/neuralinternet/SN27/blob/6261c454/compute/wandb/wandb.py#L540-L574" />
+
+## Security and Verification
+
+### Cryptographic Signature System
+
+All WandB runs are signed using the participant's hotkey to prevent data tampering and ensure authenticity. The signature covers the run ID to prevent replay attacks.
+
+```mermaid
+flowchart LR
+    subgraph "Signing Process"
+        RUN_ID["run.id"]
+        HASH["SHA-256 Hash"]
+        SIGN["wallet.hotkey.sign()"]
+        STORE["run.config.signature"]
+    end
+    
+    subgraph "Verification Process"
+        RETRIEVE["run.config.signature"]
+        RECREATE["SHA-256(run.id)"]
+        VERIFY["bt.Keypair.verify()"]
+        RESULT["True/False"]
+    end
+    
+    RUN_ID --> HASH
+    HASH --> SIGN
+    SIGN --> STORE
+    
+    RETRIEVE --> VERIFY
+    RECREATE --> VERIFY
+    VERIFY --> RESULT
+```
+
+The verification process validates both signature authenticity and validator authorization:
+
+| Verification Check | Implementation | Purpose |
+|-------------------|----------------|---------|
+| Signature validity | `bt.Keypair(ss58_address=hotkey).verify()` | Prevents data tampering |
+| Validator authorization | `hotkey in valid_validator_hotkeys` | Prevents unauthorized updates |
+| Data existence | Config field presence checks | Ensures required data |
+
+**Sources:** <SourceLink text="compute/wandb/wandb.py:576-616" href="https://github.com/neuralinternet/SN27/blob/6261c454/compute/wandb/wandb.py#L576-L616" />
+
+## Configuration and Setup
+
+### Environment Requirements
+
+| Requirement | Configuration Method | Purpose |
+|-------------|---------------------|---------|
+| WandB API Key | `WANDB_API_KEY` environment variable | Authentication |
+| WandB Login | `wandb login` command | Alternative authentication |
+| Network file | `~/.netrc` | Credential storage |
+
+### Run Configuration Schema
+
+The system maintains a standardized configuration schema across all runs:
+
+```json
+{
+  "hotkey": "ss58_address",
+  "role": "validator|miner", 
+  "config": "bt.config_object",
+  "version": "version_integer",
+  "specs": "hardware_specifications",
+  "allocated": "boolean_or_hotkey",
+  "allocated_hotkeys": ["hotkey_list"],
+  "penalized_hotkeys": ["hotkey_list"],
+  "stats": "uid_to_stats_mapping",
+  "signature": "hex_signature"
+}
+```
+
+### Database Integration
+
+The system maintains local state persistence through the `wandb_runs` table in `ComputeDb`:
+
+| Column | Type | Purpose |
+|--------|------|---------|
+| `hotkey` | TEXT | Participant identifier |
+| `run_id` | TEXT | WandB run identifier |
+
+**Sources:** <SourceLink text="compute/wandb/wandb.py:15-52" href="https://github.com/neuralinternet/SN27/blob/6261c454/compute/wandb/wandb.py#L15-L52" />, <SourceLink text="compute/wandb/wandb.py:90-108" href="https://github.com/neuralinternet/SN27/blob/6261c454/compute/wandb/wandb.py#L90-L108" />, <SourceLink text="compute/wandb/wandb.py:109-138" href="https://github.com/neuralinternet/SN27/blob/6261c454/compute/wandb/wandb.py#L109-L138" />

@@ -1,0 +1,263 @@
+---
+
+title: "CLI Tools"
+
+---
+
+
+
+import CollapsibleAside from '@components/CollapsibleAside.astro';
+
+import SourceLink from '@components/SourceLink.astro';
+
+
+
+<CollapsibleAside title="Relevant Source Files">
+
+  <SourceLink text="neurons/register.py" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/register.py" />
+
+</CollapsibleAside>
+
+
+
+
+
+
+
+
+This document covers the command-line utilities provided by the NI Compute Subnet for interacting with the compute resource marketplace. The primary CLI tool is the Registration CLI, which enables users to allocate, deallocate, and manage compute resources on the network.
+
+For information about the underlying Resource Allocation API that these tools interact with, see [Resource Allocation API](/resource-allocation-api#4). For details about the communication protocols used, see [Communication Protocols](/communication-protocols#5).
+
+## Registration CLI Tool
+
+The main CLI tool is implemented in `neurons/register.py` and provides a comprehensive interface for managing compute resources on the subnet. This tool serves as the primary user interface for validators and resource consumers to interact with the decentralized compute marketplace.
+
+### CLI Command Architecture
+
+The Registration CLI follows a command-driven architecture with the following components:
+
+```mermaid
+graph TB
+    subgraph "CLI Interface Layer"
+        MAIN["main()"]
+        PARSER["argparse.ArgumentParser"]
+        SUBPARSERS["command subparsers"]
+    end
+    
+    subgraph "Core Commands"
+        ALLOCATE["allocate()"]
+        ALLOCATE_HOTKEY["allocate_hotkey()"]
+        DEALLOCATE["deallocate()"]
+        LIST_ALLOC["list_allocations()"]
+        LIST_HOTKEYS["list_allocations_hotkeys()"]
+        LIST_RESOURCES["list_resources()"]
+        PENALIZE["penalize_hotkey()"]
+        DEPENALIZE["depenalize_hotkey()"]
+        LIST_PENALTIES["list_penalizations()"]
+    end
+    
+    subgraph "Configuration Layer"
+        GET_CONFIG["get_config()"]
+        GET_CONFIG_CLI["get_config_cli()"]
+    end
+    
+    subgraph "Backend Integration"
+        ALLOC_CONTAINER["allocate_container()"]
+        ALLOC_CONTAINER_HK["allocate_container_hotkey()"]
+        UPDATE_ALLOC_DB["update_allocation_db()"]
+        UPDATE_ALLOC_WANDB["update_allocation_wandb()"]
+    end
+    
+    MAIN --> PARSER
+    PARSER --> SUBPARSERS
+    SUBPARSERS --> ALLOCATE
+    SUBPARSERS --> ALLOCATE_HOTKEY
+    SUBPARSERS --> DEALLOCATE
+    SUBPARSERS --> LIST_ALLOC
+    SUBPARSERS --> LIST_HOTKEYS
+    SUBPARSERS --> LIST_RESOURCES
+    SUBPARSERS --> PENALIZE
+    SUBPARSERS --> DEPENALIZE
+    SUBPARSERS --> LIST_PENALTIES
+    
+    ALLOCATE --> GET_CONFIG_CLI
+    ALLOCATE --> ALLOC_CONTAINER
+    ALLOCATE_HOTKEY --> GET_CONFIG
+    ALLOCATE_HOTKEY --> ALLOC_CONTAINER_HK
+    DEALLOCATE --> UPDATE_ALLOC_DB
+    DEALLOCATE --> UPDATE_ALLOC_WANDB
+```
+
+Sources: <SourceLink text="neurons/register.py:781-854" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/register.py#L781-L854" />
+
+### Available Commands
+
+The CLI provides the following commands for resource management:
+
+| Command | Function | Description |
+|---------|----------|-------------|
+| `a` | `allocate()` | Allocate resource via device requirements (GPU) |
+| `a_hotkey` | `allocate_hotkey()` | Allocate resource via specific hotkey |
+| `d` | `deallocate()` | De-allocate resource(s) |
+| `list_a` | `list_allocations()` | List allocated resources |
+| `list_ah` | `list_allocations_hotkeys()` | List allocated resource hotkeys |
+| `list_r` | `list_resources()` | List available resources |
+| `p_hotkey` | `penalize_hotkey()` | Penalize resource via hotkey |
+| `dp_hotkey` | `depenalize_hotkey()` | De-penalize resource via hotkey |
+| `list_p` | `list_penalizations()` | List penalized hotkeys |
+
+Sources: <SourceLink text="neurons/register.py:790-827" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/register.py#L790-L827" />
+
+## Resource Allocation Flow
+
+The allocation process involves several steps from CLI input to resource provisioning:
+
+```mermaid
+sequenceDiagram
+    participant USER as "User"
+    participant CLI as "register.py"
+    participant CONFIG as "get_config_cli()"
+    participant ALLOC as "allocate_container()"
+    participant BT as "bt.wallet/bt.subtensor"
+    participant DB as "ComputeDb"
+    participant DENDRITE as "bt.dendrite"
+    participant MINER as "Miner Axon"
+    participant WANDB as "ComputeWandb"
+    
+    USER->>CLI: "a" command
+    CLI->>CONFIG: "get_config_cli()"
+    CONFIG->>USER: "prompt for GPU specs"
+    USER->>CONFIG: "gpu_type, gpu_size"
+    CLI->>ALLOC: "allocate_container(device_requirement)"
+    
+    ALLOC->>BT: "create wallet/subtensor/dendrite"
+    ALLOC->>BT: "subtensor.metagraph(netuid)"
+    ALLOC->>DB: "select_allocate_miners_hotkey()"
+    ALLOC->>DENDRITE: "query(axons, Allocate, checking=True)"
+    MINER->>ALLOC: "availability response"
+    
+    ALLOC->>DENDRITE: "query(best_axon, Allocate, checking=False)"
+    MINER->>ALLOC: "allocation response with SSH details"
+    ALLOC->>CLI: "encrypted connection info"
+    CLI->>CLI: "rsa.decrypt_data()"
+    CLI->>DB: "update_allocation_db()"
+    CLI->>WANDB: "update_allocation_wandb()"
+    CLI->>USER: "display SSH connection details"
+```
+
+Sources: <SourceLink text="neurons/register.py:230-288" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/register.py#L230-L288" />, <SourceLink text="neurons/register.py:117-180" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/register.py#L117-L180" />
+
+## System Integration
+
+The CLI tool integrates with multiple system components to provide comprehensive resource management:
+
+```mermaid
+graph TB
+    subgraph "CLI Layer"
+        REGISTER["neurons/register.py"]
+        COMMANDS["CLI Commands"]
+    end
+    
+    subgraph "Bittensor Network"
+        WALLET["bt.wallet"]
+        SUBTENSOR["bt.subtensor"]
+        DENDRITE["bt.dendrite"]
+        METAGRAPH["metagraph"]
+    end
+    
+    subgraph "Protocols"
+        ALLOCATE_PROTO["Allocate Protocol"]
+    end
+    
+    subgraph "Data Layer"
+        COMPUTEDB["ComputeDb"]
+        ALLOCATION_TABLE["allocation table"]
+        BLACKLIST_TABLE["blacklist table"]
+    end
+    
+    subgraph "Monitoring"
+        COMPUTEWANDB["ComputeWandb"]
+        ALLOCATED_HOTKEYS["allocated_hotkeys"]
+        PENALIZED_HOTKEYS["penalized_hotkeys"]
+    end
+    
+    subgraph "Security"
+        RSA["RSAEncryption"]
+        KEYPAIR["generate_key_pair()"]
+        DECRYPT["decrypt_data()"]
+    end
+    
+    REGISTER --> COMMANDS
+    COMMANDS --> WALLET
+    COMMANDS --> SUBTENSOR
+    COMMANDS --> DENDRITE
+    SUBTENSOR --> METAGRAPH
+    
+    COMMANDS --> ALLOCATE_PROTO
+    DENDRITE --> ALLOCATE_PROTO
+    
+    COMMANDS --> COMPUTEDB
+    COMPUTEDB --> ALLOCATION_TABLE
+    COMPUTEDB --> BLACKLIST_TABLE
+    
+    COMMANDS --> COMPUTEWANDB
+    COMPUTEWANDB --> ALLOCATED_HOTKEYS
+    COMPUTEWANDB --> PENALIZED_HOTKEYS
+    
+    COMMANDS --> RSA
+    RSA --> KEYPAIR
+    RSA --> DECRYPT
+```
+
+Sources: <SourceLink text="neurons/register.py:27-39" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/register.py#L27-L39" />, <SourceLink text="neurons/register.py:118-135" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/register.py#L118-L135" />
+
+## Configuration and Setup
+
+The CLI tool supports two configuration modes:
+
+### Command-line Configuration
+The `get_config()` function provides standard configuration parsing for non-interactive use:
+
+```python
+# Key configuration parameters
+--netuid         # Subnet UID (default: 1)
+--gpu_type       # Required GPU type
+--gpu_size       # Required GPU memory in MB
+--wallet.*       # Wallet configuration
+--subtensor.*    # Subtensor configuration
+--logging.*      # Logging configuration
+```
+
+### Interactive Configuration
+The `get_config_cli()` function provides interactive prompts for user-friendly operation:
+
+- Prompts for GPU type if not provided
+- Prompts for GPU memory in GB (converted to MB)
+- Sets up logging directory structure
+
+Sources: <SourceLink text="neurons/register.py:43-75" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/register.py#L43-L75" />, <SourceLink text="neurons/register.py:79-113" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/register.py#L79-L113" />
+
+## Resource Management Operations
+
+### Allocation Operations
+The CLI provides two allocation methods:
+
+1. **Device-based allocation** (`allocate()`): Searches for resources matching specific hardware requirements
+2. **Hotkey-based allocation** (`allocate_hotkey()`): Allocates resources from a specific miner hotkey
+
+Both methods return SSH connection details for accessing allocated resources.
+
+### Deallocation Operations
+The `deallocate()` function supports:
+- Single or multiple hotkey deallocation
+- Database state updates before network communication
+- Graceful error handling for offline miners
+
+### Resource Listing Operations
+The CLI provides multiple listing commands:
+- `list_allocations()`: Detailed view of allocated resources
+- `list_allocations_hotkeys()`: Simplified hotkey-only view
+- `list_resources()`: Comprehensive network resource overview with availability status
+
+Sources: <SourceLink text="neurons/register.py:230-288" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/register.py#L230-L288" />, <SourceLink text="neurons/register.py:350-445" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/register.py#L350-L445" />, <SourceLink text="neurons/register.py:446-643" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/register.py#L446-L643" />
