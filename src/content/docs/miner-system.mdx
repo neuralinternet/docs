@@ -122,7 +122,7 @@ sequenceDiagram
     participant MINER as "Miner.__init__()"
     participant AXON as "ComputeSubnetAxon"
     participant WANDB as "ComputeWandb"
-    participant LOOP as "start() Loop"
+    participant MainLoop as "start() Loop"
     participant VALIDATOR as "Validator"
     
     MAIN->>MINER: "Initialize miner"
@@ -136,22 +136,22 @@ sequenceDiagram
     MINER->>AXON: "axon.serve(netuid, subtensor)"
     MINER->>AXON: "axon.start()"
     
-    MINER->>LOOP: "asyncio.run(start())"
+    MINER->>MainLoop: "asyncio.run(start())"
     
     loop "Every 5 seconds"
-        LOOP->>LOOP: "sync_local()"
+        MainLoop->>MainLoop: "sync_local()"
         
         alt "Every 30 blocks (~6 min)"
-            LOOP->>LOOP: "get_updated_validator()"
+            MainLoop->>MainLoop: "get_updated_validator()"
         end
         
         alt "Every 150 blocks (~30 min)"
-            LOOP->>WANDB: "update_specs()"
+            MainLoop->>WANDB: "update_specs()"
         end
         
         alt "Every 75 blocks (~15 min)"
-            LOOP->>LOOP: "sync_status()"
-            LOOP->>WANDB: "log_chain_data()"
+            MainLoop->>MainLoop: "sync_status()"
+            MainLoop->>WANDB: "log_chain_data()"
         end
     end
     

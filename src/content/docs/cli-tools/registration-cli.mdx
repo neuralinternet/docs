@@ -57,26 +57,26 @@ Sources: <SourceLink text="neurons/register.py:790-830" href="https://github.com
 
 ```mermaid
 graph TD
-    CLI["`register.py`<br/>CLI Interface"]
-    CONFIG["`get_config()`<br/>Configuration Parser"]
-    WALLET["`bt.wallet`<br/>Bittensor Wallet"]
-    SUBTENSOR["`bt.subtensor`<br/>Blockchain Connection"]
-    DENDRITE["`bt.dendrite`<br/>RPC Client"]
-    METAGRAPH["`metagraph`<br/>Network State"]
+    CLI["register.py<br/>CLI Interface"]
+    CONFIG["get_config()<br/>Configuration Parser"]
+    WALLET["bt.wallet<br/>Bittensor Wallet"]
+    SUBTENSOR["bt.subtensor<br/>Blockchain Connection"]
+    DENDRITE["bt.dendrite<br/>RPC Client"]
+    METAGRAPH["metagraph<br/>Network State"]
     
     subgraph "Local State Management"
-        COMPUTEDB["`ComputeDb`<br/>SQLite Database"]
-        WANDB["`ComputeWandb`<br/>Distributed State"]
+        COMPUTEDB["ComputeDb<br/>SQLite Database"]
+        WANDB["ComputeWandb<br/>Distributed State"]
     end
     
     subgraph "Network Communication" 
-        ALLOCATE_PROTOCOL["`Allocate`<br/>Protocol Messages"]
-        RSA["`RSAEncryption`<br/>Secure Communication"]
+        ALLOCATE_PROTOCOL["Allocate<br/>Protocol Messages"]
+        RSA["RSAEncryption<br/>Secure Communication"]
     end
     
     subgraph "Miner Network"
-        MINERS["`Miners`<br/>Resource Providers"]
-        CONTAINERS["`Docker Containers`<br/>Allocated Resources"]
+        MINERS["Miners<br/>Resource Providers"]
+        CONTAINERS["Docker Containers<br/>Allocated Resources"]
     end
     
     CLI --> CONFIG
@@ -274,10 +274,10 @@ All resource allocation communications use RSA encryption for secure credential 
 
 ```mermaid
 graph LR
-    CLI["`CLI`<br/>register.py"]
-    RSA_GEN["`generate_key_pair()`<br/>RSA Key Generation"]
-    MINER["`Miner`<br/>Resource Provider"]
-    RSA_DECRYPT["`decrypt_data()`<br/>RSA Decryption"]
+    CLI["CLI<br/>register.py"]
+    RSA_GEN["generate_key_pair()<br/>RSA Key Generation"]
+    MINER["Miner<br/>Resource Provider"]
+    RSA_DECRYPT["decrypt_data()<br/>RSA Decryption"]
     
     CLI --> RSA_GEN
     RSA_GEN --> CLI
