@@ -209,7 +209,7 @@ classDiagram
     
     class prometheus_extrinsic {
         <<Function>>
-        (wallet, port, netuid)
+        +invoke(wallet, port, netuid)
     }
     
     Subtensor <|-- ComputeSubnetSubtensor

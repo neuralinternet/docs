@@ -45,18 +45,18 @@ The container management system orchestrates Docker containers through a complet
 
 ```mermaid
 stateDiagram-v2
-    [*] --> ImageBuilding: "build_sample_container()"
-    ImageBuilding --> ImageReady: "ssh-image-base created"
-    ImageReady --> ContainerCreation: "run_container()"
-    ContainerCreation --> ContainerRunning: "status: created"
-    ContainerRunning --> ContainerPaused: "pause_container()"
-    ContainerPaused --> ContainerRunning: "unpause_container()"
-    ContainerRunning --> ContainerStopped: "kill_container()"
-    ContainerStopped --> [*]: "cleanup complete"
-    ContainerRunning --> KeyExchange: "exchange_key_container()"
-    KeyExchange --> ContainerRunning: "SSH keys updated"
-    ContainerRunning --> ContainerRestarted: "restart_container()"
-    ContainerRestarted --> ContainerRunning: "restart complete"
+    [*] --> ImageBuilding : "build_sample_container()"
+    ImageBuilding --> ImageReady : "ssh-image-base created"
+    ImageReady --> ContainerCreation : "run_container()"
+    ContainerCreation --> ContainerRunning : "status created"
+    ContainerRunning --> ContainerPaused : "pause_container()"
+    ContainerPaused --> ContainerRunning : "unpause_container()"
+    ContainerRunning --> ContainerStopped : "kill_container()"
+    ContainerStopped --> [*] : "cleanup complete"
+    ContainerRunning --> KeyExchange : "exchange_key_container()"
+    KeyExchange --> ContainerRunning : "SSH keys updated"
+    ContainerRunning --> ContainerRestarted : "restart_container()"
+    ContainerRestarted --> ContainerRunning : "restart complete"
 ```
 
 Sources: <SourceLink text="neurons/Miner/container.py:57-103" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/Miner/container.py#L57-L103" />, <SourceLink text="neurons/Miner/container.py:384-420" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/Miner/container.py#L384-L420" />, <SourceLink text="neurons/Miner/container.py:421-473" href="https://github.com/neuralinternet/SN27/blob/6261c454/neurons/Miner/container.py#L421-L473" />
