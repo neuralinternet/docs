@@ -55,11 +55,13 @@
   let modal = null;
   let isModalOpen = false;
   let currentZoom = 1;
+  let panX = 0;
+  let panY = 0;
   let isDragging = false;
-  let startX = 0;
-  let startY = 0;
-  let scrollLeft = 0;
-  let scrollTop = 0;
+  let dragStartX = 0;
+  let dragStartY = 0;
+  let startPanX = 0;
+  let startPanY = 0;
 
   // Initialize modal
   function initModal() {
@@ -91,8 +93,8 @@
       const zoomOut = modal.querySelector('#zoom-out');
       const zoomReset = modal.querySelector('#zoom-reset');
 
-      zoomIn.addEventListener('click', () => adjustZoom(0.1));
-      zoomOut.addEventListener('click', () => adjustZoom(-0.1));
+      zoomIn.addEventListener('click', () => adjustZoom(0.2));
+      zoomOut.addEventListener('click', () => adjustZoom(-0.2));
       zoomReset.addEventListener('click', resetZoom);
 
       // Pan functionality
@@ -112,31 +114,74 @@
       modalBody.addEventListener('wheel', (e) => {
         if (e.ctrlKey || e.metaKey) {
           e.preventDefault();
-          const delta = e.deltaY > 0 ? -0.05 : 0.05;
-          adjustZoom(delta);
+          const delta = e.deltaY > 0 ? -0.1 : 0.1;
+          adjustZoom(delta, e);
         }
       });
     }
   }
 
   // Zoom functions
-  function adjustZoom(delta) {
-    currentZoom = Math.max(0.5, Math.min(3, currentZoom + delta));
-    applyZoom();
+  function adjustZoom(delta, e) {
+    const oldZoom = currentZoom;
+    const newZoom = Math.max(0.2, Math.min(5, oldZoom + delta));
+
+    if (newZoom === oldZoom) {
+      return;
+    }
+
+    const modalBody = modal.querySelector('.mermaid-modal-body');
+    const rect = modalBody.getBoundingClientRect();
+
+    let mouseX, mouseY;
+    if (e) {
+      // Zoom to mouse cursor
+      mouseX = e.clientX - rect.left;
+      mouseY = e.clientY - rect.top;
+    } else {
+      // Zoom to center for button clicks
+      mouseX = rect.width / 2;
+      mouseY = rect.height / 2;
+    }
+
+    currentZoom = newZoom;
+    
+    // Adjust pan to keep the point under the mouse stationary
+    panX = mouseX - (mouseX - panX) * (newZoom / oldZoom);
+    panY = mouseY - (mouseY - panY) * (newZoom / oldZoom);
+
+    applyTransform();
   }
 
   function resetZoom() {
     currentZoom = 1;
-    applyZoom();
-    // Reset pan position
+    panX = 0;
+    panY = 0;
+    applyTransform(); // Apply base transform to allow measurement
+    centerDiagram();  // Recenter the diagram
+  }
+  
+  function centerDiagram() {
     const modalBody = modal.querySelector('.mermaid-modal-body');
-    modalBody.scrollLeft = 0;
-    modalBody.scrollTop = 0;
+    const diagramContainer = modal.querySelector('.mermaid-diagram-container');
+    const diagramEl = diagramContainer.firstElementChild;
+    if (!diagramEl) return;
+
+    const viewRect = modalBody.getBoundingClientRect();
+    // Use offsetWidth/Height for layout dimensions, which are unaffected by scale
+    const diagramWidth = diagramEl.offsetWidth * currentZoom;
+    const diagramHeight = diagramEl.offsetHeight * currentZoom;
+
+    panX = (viewRect.width - diagramWidth) / 2;
+    panY = (viewRect.height - diagramHeight) / 2;
+    
+    applyTransform();
   }
 
-  function applyZoom() {
+  function applyTransform() {
     const diagramContainer = modal.querySelector('.mermaid-diagram-container');
-    diagramContainer.style.transform = `scale(${currentZoom})`;
+    diagramContainer.style.transformOrigin = '0 0';
+    diagramContainer.style.transform = `translate(${panX}px, ${panY}px) scale(${currentZoom})`;
     
     const zoomLevel = modal.querySelector('.mermaid-zoom-level');
     zoomLevel.textContent = `${Math.round(currentZoom * 100)}%`;
@@ -146,24 +191,24 @@
   function startDragging(e) {
     const diagramContainer = modal.querySelector('.mermaid-diagram-container');
     if (e.target.closest('.mermaid-diagram-container')) {
+      e.preventDefault();
       isDragging = true;
       diagramContainer.style.cursor = 'grabbing';
-      const modalBody = modal.querySelector('.mermaid-modal-body');
-      startX = e.pageX || e.clientX;
-      startY = e.pageY || e.clientY;
-      scrollLeft = modalBody.scrollLeft;
-      scrollTop = modalBody.scrollTop;
+      dragStartX = e.pageX || e.clientX;
+      dragStartY = e.pageY || e.clientY;
+      startPanX = panX;
+      startPanY = panY;
     }
   }
 
   function drag(e) {
     if (!isDragging) return;
     e.preventDefault();
-    const modalBody = modal.querySelector('.mermaid-modal-body');
-    const x = (e.pageX || e.clientX) - startX;
-    const y = (e.pageY || e.clientY) - startY;
-    modalBody.scrollLeft = scrollLeft - x;
-    modalBody.scrollTop = scrollTop - y;
+    const dx = (e.pageX || e.clientX) - dragStartX;
+    const dy = (e.pageY || e.clientY) - dragStartY;
+    panX = startPanX + dx;
+    panY = startPanY + dy;
+    applyTransform();
   }
 
   function stopDragging() {
@@ -188,9 +233,8 @@
       return;
     }
     
-    // Clear container and reset zoom
+    // Clear container
     diagramContainer.innerHTML = '';
-    resetZoom();
     
     // Show modal
     modal.classList.add('active');
@@ -206,18 +250,11 @@
 
     // Render the mermaid diagram in the modal
     if (window.mermaid && window.renderMermaidDiagrams) {
-      // Use a unique ID for the modal diagram
       await window.renderMermaidDiagrams();
     }
 
-    // Center the diagram
-    const modalBody = modal.querySelector('.mermaid-modal-body');
-    setTimeout(() => {
-      const containerRect = modalBody.getBoundingClientRect();
-      const diagramRect = diagramContainer.getBoundingClientRect();
-      modalBody.scrollLeft = (diagramRect.width - containerRect.width) / 2;
-      modalBody.scrollTop = (diagramRect.height - containerRect.height) / 2;
-    }, 100);
+    // Reset zoom and center the diagram once rendered
+    setTimeout(resetZoom, 50);
   }
 
   // Close modal
