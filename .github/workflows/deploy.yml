@@ -3,7 +3,7 @@ name: Build and Deploy Docs Site to Google Cloud Storage
 on:
   push:
     branches:
-      - feat-deploy-test
+      - main
   workflow_dispatch:
 
 env:
