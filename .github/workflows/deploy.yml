@@ -49,7 +49,7 @@ jobs:
 
       - name: Deploy to Google Cloud Storage
         run: |-
-          gcloud storage rsync ${{ env.ASTRO_BUILD_DIR }} gs://${{ env.GCP_BUCKET_NAME }} --recursive --delete-unmatched-destination-objects --checksum
+          gcloud storage rsync ${{ env.ASTRO_BUILD_DIR }} gs://${{ env.GCP_BUCKET_NAME }} --recursive --delete-unmatched-destination-objects
 
       - name: Deployment successful!
         run: echo "Site successfully deployed to gs://${{ env.GCP_BUCKET_NAME }}"
