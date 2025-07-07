@@ -46,7 +46,7 @@ export default defineConfig({
 				{
 					icon: 'discord',
 					label: 'Discord',
-					href: 'https://discord.com/invite/neuralinternet',
+					href: 'https://discord.gg/neural-internet',
 				},
 				{
 					icon: 'x.com',
