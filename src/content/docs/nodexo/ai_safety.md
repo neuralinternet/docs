@@ -60,7 +60,7 @@ In terms of security, decentralized AI offers a distinct advantage. While centra
 
 Bittensor is solving AI Safety by decentralizing the creation and ownership of machine intelligence. Democratizing the access and creation of machine intelligence ensures that the power of this transformative technology is not held in a select few corporations. Bittensor brings us open-access and open-ownership where intelligence is uncensored, unbiased and aligned to all.
 
-Neural Internet promises to build with Responsible AI through collaboration. By providing access to the shared collective knowledge that Bittensor is, we bring ownership and governance of AI to the collective. Open-Source and collaborative development will outpace Centralized AI.
+Nodexo promises to build with Responsible AI through collaboration. By providing access to the shared collective knowledge that Bittensor is, we bring ownership and governance of AI to the collective. Open-Source and collaborative development will outpace Centralized AI.
 
 ### Embracing a Decentralized AI Future
 

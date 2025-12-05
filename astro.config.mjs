@@ -5,7 +5,7 @@ import rehypeMermaid from 'rehype-mermaid';
 
 // https://astro.build/config
 export default defineConfig({
-	site: 'https://docs.neuralinternet.ai',
+	site: 'https://docs.nodexo.ai',
 	markdown: {
 		rehypePlugins: [
 			[rehypeMermaid, {
@@ -31,8 +31,8 @@ export default defineConfig({
 				// Or, if installed as a dependency and Astro bundles it, this might not be needed here.
 			],
 			logo: {
-				light: './src/assets/ni-logo-text.png',
-				dark: './src/assets/ni-logo-text.avif',
+				light: './src/assets/nodexo-logo-text.png',
+				dark: './src/assets/nodexo-logo-text-dark.png',
 			},
 			customCss: [
 				'./src/styles/custom.css'
@@ -41,17 +41,17 @@ export default defineConfig({
 				{
 					icon: 'github',
 					label: 'GitHub',
-					href: 'https://github.com/neuralinternet/compute-subnet',
+					href: 'https://github.com/neuralinternet/SN27',
 				},
 				{
 					icon: 'discord',
 					label: 'Discord',
-					href: 'https://discord.gg/neural-internet',
+					href: 'https://discord.gg/nodexo',
 				},
 				{
 					icon: 'x.com',
 					label: 'X',
-					href: 'https://x.com/neural_internet',
+					href: 'https://x.com/nodex0_',
 				},
 			],
 		}),

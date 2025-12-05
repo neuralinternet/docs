@@ -4,7 +4,7 @@ title: "Nodexo Cloud Platform"
 
 ## **Overview**
 
-Nodexo is the **flagship decentralized cloud computing platform** powered by **NI Compute (Subnet 27)**. Designed to offer **seamless, on-demand access to GPU resources**, Nodexo provides enterprises, researchers, and developers with **high-performance compute for AI training, inference, and large-scale computational tasks**—all within a **trustless and decentralized** ecosystem.
+Nodexo is the **flagship decentralized cloud computing platform** powered by **Nodexo Compute (Subnet 27)**. Designed to offer **seamless, on-demand access to GPU resources**, Nodexo provides enterprises, researchers, and developers with **high-performance compute for AI training, inference, and large-scale computational tasks**—all within a **trustless and decentralized** ecosystem.
 
 Built on the **Bittensor subnet architecture**, Nodexo **removes reliance on centralized cloud providers**, optimizing cost, efficiency, and **global GPU availability** through a **permissionless network** of **miners and validators**.
 
@@ -14,7 +14,7 @@ Built on the **Bittensor subnet architecture**, Nodexo **removes reliance on cen
 
 #### **Decentralized Infrastructure**
 
-* **Powered by Bittensor Subnet 27** (NI Compute)
+* **Powered by Bittensor Subnet 27** (Nodexo Compute)
 * **Trustless GPU validation** via **Proof-of-GPU (PoG)**
 * **Self-sustaining economic model** driven by **real-world compute demand**
 * **Fair, transparent resource allocation** across a **distributed network**
@@ -57,7 +57,7 @@ Built on the **Bittensor subnet architecture**, Nodexo **removes reliance on cen
 
 #### **For GPU Providers (Miners)**
 
-1. **Join the NI Compute Subnet (SN27)**
+1. **Join the Nodexo Compute Subnet (SN27)**
 
    * Register as a **GPU provider** (miner).
    * List available **compute resources**.

@@ -25,13 +25,13 @@ import SourceLink from '@components/SourceLink.astro';
 
 
 
-This document covers the three core Bittensor synapse protocols used for communication between validators and miners in the NI Compute Subnet: hardware specification queries, resource allocation requests, and challenge-response mechanisms. These protocols form the foundational communication layer for the compute marketplace.
+This document covers the three core Bittensor synapse protocols used for communication between validators and miners in the Nodexo Compute Subnet: hardware specification queries, resource allocation requests, and challenge-response mechanisms. These protocols form the foundational communication layer for the compute marketplace.
 
 For information about custom Bittensor extensions and Axon modifications, see [Custom Axon and Subtensor](/communication-protocols/custom-axon-and-subtensor#5.2).
 
 ## Protocol Architecture
 
-The NI Compute Subnet implements three primary communication protocols that extend Bittensor's `bt.Synapse` base class. Each protocol handles a specific aspect of the validator-miner interaction workflow.
+The Nodexo Compute Subnet implements three primary communication protocols that extend Bittensor's `bt.Synapse` base class. Each protocol handles a specific aspect of the validator-miner interaction workflow.
 
 ### Protocol Inheritance Structure
 
@@ -270,7 +270,7 @@ flowchart TD
 
 ## Protocol Integration
 
-These protocols integrate with the broader NI Compute Subnet architecture through the Bittensor network layer and are used by both validators and miners for different purposes:
+These protocols integrate with the broader Nodexo Compute Subnet architecture through the Bittensor network layer and are used by both validators and miners for different purposes:
 
 - **Validators** use these protocols to query miner capabilities, allocate resources, and verify computational claims
 - **Miners** implement protocol handlers to respond to specification queries, manage resource allocation, and execute proof-of-work challenges

@@ -6,7 +6,7 @@ title: "Running A Validator"
 
 ---
 
-Validators hold the critical responsibility of rigorously assessing and verifying the computational capabilities of miners within the NI Compute Subnet. This multifaceted evaluation process ensures that only high-performance and reliable hardware contributes to the network, maintaining its integrity and efficiency.
+Validators hold the critical responsibility of rigorously assessing and verifying the computational capabilities of miners within the Nodexo Compute Subnet. This multifaceted evaluation process ensures that only high-performance and reliable hardware contributes to the network, maintaining its integrity and efficiency.
 
 #### Evaluation Process
 

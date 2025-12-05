@@ -35,13 +35,13 @@ import SourceLink from '@components/SourceLink.astro';
 
 ## Purpose and Scope
 
-This document describes the high-level system architecture of the NI Compute Subnet, a decentralized GPU compute marketplace built on the Bittensor network. It covers the core system components, their interactions, communication protocols, and data flow patterns that enable validators to evaluate miner capabilities and allocate GPU resources to clients.
+This document describes the high-level system architecture of the Nodexo Compute Subnet, a decentralized GPU compute marketplace built on the Bittensor network. It covers the core system components, their interactions, communication protocols, and data flow patterns that enable validators to evaluate miner capabilities and allocate GPU resources to clients.
 
 For detailed protocol specifications, see [Communication Protocols](/communication-protocols#5). For database schema and operations, see [Database Operations](/validator-system/database-operations#2.3). For installation and deployment procedures, see [Installation and Setup](/installation-and-setup#1.2).
 
 ## System Overview
 
-The NI Compute Subnet implements a three-tier architecture consisting of validators that assess miner performance, miners that provide GPU resources, and a resource allocation API that manages client requests. The system operates on Bittensor's peer-to-peer network while providing traditional REST API access for external clients.
+The Nodexo Compute Subnet implements a three-tier architecture consisting of validators that assess miner performance, miners that provide GPU resources, and a resource allocation API that manages client requests. The system operates on Bittensor's peer-to-peer network while providing traditional REST API access for external clients.
 
 ```mermaid
 graph TB
@@ -51,7 +51,7 @@ graph TB
         API_CLIENTS["API Clients"]
     end
     
-    subgraph "NI Compute Subnet Core"
+    subgraph "Nodexo Compute Subnet Core"
         subgraph "Validator Layer"
             VALIDATOR["Validator<br/>neurons/validator.py"]
             POG["ProofOfGPU<br/>Benchmarking Engine"]

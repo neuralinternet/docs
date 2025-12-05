@@ -29,7 +29,7 @@ import SourceLink from '@components/SourceLink.astro';
 
 ## Overview
 
-This page documents the network communication protocols and message formats used between system components in the NI Compute subnet. The system implements three core Bittensor synapse protocols (`Specs`, `Allocate`, `Challenge`) and custom extensions to Bittensor's communication infrastructure (`ComputeSubnetAxon`, `ComputeSubnetSubtensor`, `ComputeSubnetAxonMiddleware`).
+This page documents the network communication protocols and message formats used between system components in the Nodexo Compute subnet. The system implements three core Bittensor synapse protocols (`Specs`, `Allocate`, `Challenge`) and custom extensions to Bittensor's communication infrastructure (`ComputeSubnetAxon`, `ComputeSubnetSubtensor`, `ComputeSubnetAxonMiddleware`).
 
 These protocols enable hardware specification discovery, resource allocation, and cryptographic validation challenges between validators and miners. For information about the HTTP API endpoints, see [Resource Allocation API](/resource-allocation-api#4).
 
@@ -37,7 +37,7 @@ Sources: <SourceLink text="compute/protocol.py:1-136" href="https://github.com/n
 
 ## Protocol Stack
 
-NI Compute extends Bittensor's communication infrastructure with custom protocols specific to the GPU compute marketplace. The system implements three main synapse protocols and uses customized versions of Bittensor's Axon and Subtensor components.
+Nodexo Compute extends Bittensor's communication infrastructure with custom protocols specific to the GPU compute marketplace. The system implements three main synapse protocols and uses customized versions of Bittensor's Axon and Subtensor components.
 
 **Protocol Stack Architecture**
 ```mermaid
@@ -75,7 +75,7 @@ Sources: <SourceLink text="compute/protocol.py:23-136" href="https://github.com/
 
 ## Core Synapse Protocols
 
-NI Compute defines three primary protocols for communication between validators and miners, all extending Bittensor's Synapse base class.
+Nodexo Compute defines three primary protocols for communication between validators and miners, all extending Bittensor's Synapse base class.
 
 ### Specs Protocol
 
@@ -200,7 +200,7 @@ Sources: <SourceLink text="compute/protocol.py:112-136" href="https://github.com
 
 ## Custom Axon and Subtensor
 
-NI Compute extends Bittensor's communication infrastructure with customized components to support the specific needs of the compute subnet.
+Nodexo Compute extends Bittensor's communication infrastructure with customized components to support the specific needs of the compute subnet.
 
 ### ComputeSubnetAxon
 
@@ -370,7 +370,7 @@ Sources: <SourceLink text="compute/protocol.py:1-136" href="https://github.com/n
 
 ## Protocol Version Management
 
-NI Compute implements version tracking through the `__version_as_int__` global variable and `get_local_version()` function to ensure protocol compatibility between nodes.
+Nodexo Compute implements version tracking through the `__version_as_int__` global variable and `get_local_version()` function to ensure protocol compatibility between nodes.
 
 **Version Integration Points**
 ```mermaid
@@ -403,7 +403,7 @@ Sources: <SourceLink text="compute/axon.py:47-104" href="https://github.com/neur
 
 ## Subtensor Integration
 
-NI Compute extends the standard Bittensor Subtensor to support custom extrinsics required for the compute subnet through the `custom_serve_extrinsic` function and `ComputeSubnetSubtensor` class.
+Nodexo Compute extends the standard Bittensor Subtensor to support custom extrinsics required for the compute subnet through the `custom_serve_extrinsic` function and `ComputeSubnetSubtensor` class.
 
 **Custom Serve Extrinsic Implementation**
 ```mermaid
@@ -454,7 +454,7 @@ Sources: <SourceLink text="compute/axon.py:63-150" href="https://github.com/neur
 
 ## Summary
 
-The communication protocols in NI Compute form a critical infrastructure layer that enables secure, efficient interaction between validators and miners in the decentralized GPU marketplace. By extending Bittensor's core communication components, NI Compute implements specialized protocols for hardware discovery, verification, and resource allocation.
+The communication protocols in Nodexo Compute form a critical infrastructure layer that enables secure, efficient interaction between validators and miners in the decentralized GPU marketplace. By extending Bittensor's core communication components, Nodexo Compute implements specialized protocols for hardware discovery, verification, and resource allocation.
 
 This layered approach ensures:
 
@@ -463,4 +463,4 @@ This layered approach ensures:
 3. **Resource Management**: Efficient allocation and management of GPU resources
 4. **Monitoring**: Integration with Prometheus for metrics collection
 
-Understanding these protocols is essential for developing and extending the NI Compute platform with new features and capabilities.
+Understanding these protocols is essential for developing and extending the Nodexo Compute platform with new features and capabilities.
