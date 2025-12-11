@@ -34,7 +34,7 @@ Modern AI training often leverages multi-GPU setups to expedite computational pr
 
 ---
 
-### NI Compute Subnet Architecture
+### Nodexo Compute Subnet Architecture
 
 The NI **Compute Subnet** serves as the backbone for integrating diverse cloud platforms into a unified computational network. It orchestrates resource sharing and allocation, enabling miners to contribute their GPU resources while validators ensure the integrity and efficiency of these contributions.
 
@@ -82,7 +82,7 @@ The scoring algorithm dynamically adjusts miner scores based on verified perform
 
 ---
 
-### Integration of PoG with NI Compute Subnet
+### Integration of PoG with Nodexo Compute Subnet
 
 **Proof-of-GPU (PoG)** and NI's **Compute Subnet** forms the cornerstone of a trustworthy and efficient decentralized AI compute infrastructure. This synergy ensures that GPU performance is validated accurately, and computational resources are allocated optimally across the network.
 

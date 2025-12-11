@@ -25,13 +25,13 @@ import SourceLink from '@components/SourceLink.astro';
 
 
 
-This document explains how the NI Compute system implements and utilizes Prometheus metrics for monitoring and observability. Prometheus is a popular open-source monitoring and alerting toolkit used to collect and query time-series metrics from various systems. In NI Compute, Prometheus metrics provide crucial insights into the performance and behavior of validators and miners in the decentralized GPU compute marketplace.
+This document explains how the Nodexo Compute system implements and utilizes Prometheus metrics for monitoring and observability. Prometheus is a popular open-source monitoring and alerting toolkit used to collect and query time-series metrics from various systems. In Nodexo Compute, Prometheus metrics provide crucial insights into the performance and behavior of validators and miners in the decentralized GPU compute marketplace.
 
 For information about general monitoring and integration with Weights & Biases, see [WandB Integration](/monitoring-and-metrics/wandb-integration#6.1).
 
 ## 1. Prometheus Metrics Architecture
 
-Prometheus metrics in NI Compute are implemented through a specialized registration system that integrates with the Bittensor blockchain. This integration ensures that monitoring endpoints are discoverable by other network participants.
+Prometheus metrics in Nodexo Compute are implemented through a specialized registration system that integrates with the Bittensor blockchain. This integration ensures that monitoring endpoints are discoverable by other network participants.
 
 ```mermaid
 flowchart TD
@@ -109,7 +109,7 @@ Sources: <SourceLink text="compute/axon.py:166-201" href="https://github.com/neu
 
 ### 3.1 Registration Functions
 
-The NI Compute system implements several key functions to handle Prometheus metrics registration:
+The Nodexo Compute system implements several key functions to handle Prometheus metrics registration:
 
 #### ComputeSubnetSubtensor.serve_prometheus()
 
@@ -251,7 +251,7 @@ While the specific metrics exposed aren't explicitly documented in the code prov
 
 ### 6.3 Integration with Monitoring Systems
 
-To monitor NI Compute nodes using Prometheus:
+To monitor Nodexo Compute nodes using Prometheus:
 
 1. Configure a Prometheus server to scrape the registered endpoints
 2. Set up appropriate recording rules and alerts
@@ -259,7 +259,7 @@ To monitor NI Compute nodes using Prometheus:
 
 ## 7. Monitoring Lifecycle
 
-The NI Compute system ensures continuous monitoring availability through its lifecycle management:
+The Nodexo Compute system ensures continuous monitoring availability through its lifecycle management:
 
 ```mermaid
 flowchart LR
@@ -350,4 +350,4 @@ Sources: <SourceLink text="compute/axon.py:258-283" href="https://github.com/neu
 
 ## 9. Summary
 
-Prometheus metrics in NI Compute provide essential observability into the decentralized GPU marketplace. The registration system ensures that metrics endpoints are discoverable through the Bittensor blockchain, allowing for comprehensive monitoring of validators and miners. Through version tracking and periodic updates, the system maintains monitoring capabilities even as the software evolves.
+Prometheus metrics in Nodexo Compute provide essential observability into the decentralized GPU marketplace. The registration system ensures that metrics endpoints are discoverable through the Bittensor blockchain, allowing for comprehensive monitoring of validators and miners. Through version tracking and periodic updates, the system maintains monitoring capabilities even as the software evolves.

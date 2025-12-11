@@ -6,7 +6,7 @@ For staking via frontend/wallets, you will need a wallet like Talisman, The Bitt
 
 Neural Inτerneτ validator hotkey is: `5GmvyePN9aYErXBBhBnxZKGoGk4LKZApE4NkaSzW62CYCYNA`
 
-Delegating to the above hotkey address means you are staking to Neural Internet’s validator. You can ‘undelegate’ or unstake any time and receive your $TAO back in your cold key address.
+Delegating to the above hotkey address means you are staking to Nodexo’s validator. You can ‘undelegate’ or unstake any time and receive your $TAO back in your cold key address.
 
 ### Delegation Process
 

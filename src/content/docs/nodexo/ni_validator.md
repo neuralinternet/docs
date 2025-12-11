@@ -1,16 +1,16 @@
 ---
-title: "NI Validator"
+title: "Nodexo Validator"
 ---
 
 **Validator Delegate Hotkey:** 5GmvyePN9aYErXBBhBnxZKGoGk4LKZApE4NkaSzW62CYCYNA
 
-Stake Now: [Staking to NI](https://delegate.taostats.io/staking?hkey=5GmvyePN9aYErXBBhBnxZKGoGk4LKZApE4NkaSzW62CYCYNA)
+Stake Now: [Staking to Nodexo](https://delegate.taostats.io/staking?hkey=5GmvyePN9aYErXBBhBnxZKGoGk4LKZApE4NkaSzW62CYCYNA)
 
 ### **Validating Intelligence**
 
 The Bittensor network comprises two types of nodes: **Miners** and **Validators**. Miners, when prompted by Validators, provide information and are assessed based on the value of their responses.
 
-As a **validator** on the Bittensor protocol, **Neural Internet** plays a crucial role in maintaining the network's integrity and security. Our validation process involves verifying the computational work done by miners, ensuring the quality and reliability of the network. Our participation supports decentralized AI initiatives and aligns with Bittensor’s vision of democratizing AI technologies.
+As a **validator** on the Bittensor protocol, **Nodexo** plays a crucial role in maintaining the network's integrity and security. Our validation process involves verifying the computational work done by miners, ensuring the quality and reliability of the network. Our participation supports decentralized AI initiatives and aligns with Bittensor’s vision of democratizing AI technologies.
 
 ### **Access to Collective Knowledge and Resources**
 
@@ -22,15 +22,15 @@ It is the community’s responsibility to recognize the validators contributing 
 
 ---
 
-## **NI Validator: The Premier Compute Validator on Subnet 27**
+## **Nodexo Validator: The Premier Compute Validator on Subnet 27**
 
-### **Specializing in NI Compute**
+### **Specializing in Nodexo Compute**
 
-The **NI Validator** is dedicated exclusively to **NI Compute** (**Subnet 27).** Unlike multi-subnet validators that spread their focus thin, NI Validator is **laser-focused on Compute**, maximizing efficiency, accuracy, and reliability for AI model training, inference, and high-performance workloads.
+The **Nodexo Validator** is dedicated exclusively to **Nodexo Compute** (**Subnet 27).** Unlike multi-subnet validators that spread their focus thin, Nodexo Validator is **laser-focused on Compute**, maximizing efficiency, accuracy, and reliability for AI model training, inference, and high-performance workloads.
 
 ### **Invest in the Future of AI Compute**
 
-Delegates who stake to the NI Validator not only earn **competitive staking rewards** but also gain **access** to the NI Token—staking them directly in the **Compute Commodity** of the future. This positions delegates as stakeholders in a decentralized AI infrastructure designed to rival traditional cloud providers while upholding **transparency, fairness, and cost-efficiency**.
+Delegates who stake to the Nodexo Validator not only earn **competitive staking rewards** but also gain **access** to the NI Token—staking them directly in the **Compute Commodity** of the future. This positions delegates as stakeholders in a decentralized AI infrastructure designed to rival traditional cloud providers while upholding **transparency, fairness, and cost-efficiency**.
 
 **Benefits for Delegates:**
 
@@ -40,6 +40,6 @@ Delegates who stake to the NI Validator not only earn **competitive staking rewa
 
 ## **Shaping the Future of Decentralized AI**
 
-By staking with **NI Validator**, delegates directly **contribute to building a decentralized, permissionless AI compute network**—one that breaks free from monopolized infrastructure and hands power back to the users. The NI Compute subnet (SN27) is redefining how AI models are trained, deployed, and accessed. Delegating here is an investment in a **future where compute is democratized, open, and optimized for innovation**.
+By staking with **NI Validator**, delegates directly **contribute to building a decentralized, permissionless AI compute network**—one that breaks free from monopolized infrastructure and hands power back to the users. The Nodexo Compute subnet (SN27) is redefining how AI models are trained, deployed, and accessed. Delegating here is an investment in a **future where compute is democratized, open, and optimized for innovation**.
 
 Join **NI Validator** on **Subnet 27** and stake in the next evolution of decentralized artificial intelligence.

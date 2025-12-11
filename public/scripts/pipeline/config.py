@@ -11,11 +11,11 @@ from urllib.parse import urljoin
 WORKSPACE_BASE = os.path.dirname(os.path.abspath(__file__))
 
 # --- DeepWiki Configuration ---
-BASE_DEEPWIKI_URL = "https://deepwiki.com/neuralinternet/ni-compute" # Confirmed from brief (ensure this is the correct one you want to use)
-# The deepwiki_href of the page that should become the main index.mdx 
+BASE_DEEPWIKI_URL = "https://deepwiki.com/nodexo/nodexo-compute" # Updated to Nodexo branding
+# The deepwiki_href of the page that should become the main index.mdx
 # (e.g., the content for '/' in your Astro site's documentation section)
 # Example: If the "Overview" page at "/tplr-ai/templar/1-overview" is your main docs page.
-ROOT_DEEPWIKI_PAGE_HREF = "/neuralinternet/ni-compute/1-overview" 
+ROOT_DEEPWIKI_PAGE_HREF = "/nodexo/nodexo-compute/1-overview" 
 
 # --- GitHub Repository Details (for resolving source links) ---
 GITHUB_REPO_URL = "https://github.com/neuralinternet/SN27" # e.g., "https://github.com/your-org/your-repo"

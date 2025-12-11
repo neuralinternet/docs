@@ -1,26 +1,26 @@
 ---
-title: "NI Compuτe: Subnet Miner Setup"
+title: "Nodexo Compuτe: Subnet Miner Setup"
 ---
 
 ## 1. INTRODUCTION
 
-For miners interested in joining this innovative network, Subnet 27 offers the opportunity to contribute computing resources and **earn $NI** in return. This guide is structured to provide a comprehensive breakdown of how you can get started with contributing to Bittensor’s commodity markets using your compute power.
+For miners interested in joining this innovative network, Subnet 27 offers the opportunity to contribute computing resources and **earn $NI** in return. This guide is structured to provide a comprehensive breakdown of how you can get started with contributing to Bittensor's commodity markets using your compute power.
 
 ## **Decentralizing Compute**
 
-NI Compute decentralizes computing resources by combining siloed pools of compute on a blockchain to be validated and accessed trustlessly. This opens a door to scalable compute without the constraints of centralized power.
+Nodexo Compute decentralizes computing resources by combining siloed pools of compute on a blockchain to be validated and accessed trustlessly. This opens a door to scalable compute without the constraints of centralized power.
 
-![](https://docs.neuralinternet.ai/~gitbook/image?url=https%3A%2F%2Fcontent.gitbook.com%2Fcontent%2FRCFZhMrQpz0DM7pJi6mq%2Fblobs%2FizrLCHm4g9RaPDSFREa4%2Fcompute1.png&width=768&dpr=4&quality=100&sign=960b335e&sv=2)
+![](https://docs.nodexo.ai/~gitbook/image?url=https%3A%2F%2Fcontent.gitbook.com%2Fcontent%2FRCFZhMrQpz0DM7pJi6mq%2Fblobs%2FizrLCHm4g9RaPDSFREa4%2Fcompute1.png&width=768&dpr=4&quality=100&sign=960b335e&sv=2)
 
 Subnetwork 27
 
 ### Powered By Bittensor
 
-NI Compute brings, arguably, the most important and finite resource needed for the creation of machine intelligence. All network participants will have access to an ever-expanding pool of compute for all development needs.
+Nodexo Compute brings, arguably, the most important and finite resource needed for the creation of machine intelligence. All network participants will have access to an ever-expanding pool of compute for all development needs.
 
 **What is a decentralized supercomputer without access to permissionless compute?**
 
-![](https://docs.neuralinternet.ai/~gitbook/image?url=https%3A%2F%2Fcontent.gitbook.com%2Fcontent%2FRCFZhMrQpz0DM7pJi6mq%2Fblobs%2Fw1R7MxeZMqrsQ4sz1opq%2Fcompute2.png&width=768&dpr=4&quality=100&sign=a68e2e77&sv=2)
+![](https://docs.nodexo.ai/~gitbook/image?url=https%3A%2F%2Fcontent.gitbook.com%2Fcontent%2FRCFZhMrQpz0DM7pJi6mq%2Fblobs%2Fw1R7MxeZMqrsQ4sz1opq%2Fcompute2.png&width=768&dpr=4&quality=100&sign=a68e2e77&sv=2)
 
 Subnetwork 27
 
@@ -32,11 +32,11 @@ Miners contribute processing resources, notably GPU (Graphics Processing Unit) i
 
 **Performance-Based Mining:** The system operates on a performance-based reward mechanism, where miners are incentivized through a dynamic reward structure correlated to the processing capability of their hardware. High-performance devices are eligible for increased compensation, reflecting their greater contribution to the network's computational throughput. Emphasizing the integration of GPU instances is critical due to their superior computational power, particularly in tasks regarding machine learning.
 
-![](https://docs.neuralinternet.ai/~gitbook/image?url=https%3A%2F%2F3449997301-files.gitbook.io%2F%7E%2Ffiles%2Fv0%2Fb%2Fgitbook-x-prod.appspot.com%2Fo%2Fspaces%252FRCFZhMrQpz0DM7pJi6mq%252Fuploads%252Fkd6OZovkBiDnAqrBHVGp%252Fsn27_miner_overview1.png%3Falt%3Dmedia%26token%3D7f342c3e-adf3-4469-98ec-c657216da27f&width=768&dpr=4&quality=100&sign=9a7a9e01&sv=2)
+![](https://docs.nodexo.ai/~gitbook/image?url=https%3A%2F%2F3449997301-files.gitbook.io%2F%7E%2Ffiles%2Fv0%2Fb%2Fgitbook-x-prod.appspot.com%2Fo%2Fspaces%252FRCFZhMrQpz0DM7pJi6mq%252Fuploads%252Fkd6OZovkBiDnAqrBHVGp%252Fsn27_miner_overview1.png%3Falt%3Dmedia%26token%3D7f342c3e-adf3-4469-98ec-c657216da27f&width=768&dpr=4&quality=100&sign=9a7a9e01&sv=2)
 
 ---
 
-**Rent A Server From Subnet 27:** <https://app.neuralinternet.ai/>
+**Rent A Server From Subnet 27:** <https://console.nodexo.ai>
 
 **Compute Subnet Github:** <https://github.com/neuralinternet/compute-subnet>
 

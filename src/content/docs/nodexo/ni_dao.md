@@ -1,10 +1,10 @@
 ---
-title: "NI DAO"
+title: "Nodexo DAO"
 ---
 
-**Neural Internet operates as a Decentralized Autonomous Organization LLC.** DAOs are the future of corporate structure that operates through smart-contracts on the blockchain**.** Unlike traditional organizations, DAOs lack a central authority and instead distribute power among their members.
+**Nodexo operates as a Decentralized Autonomous Organization LLC.** DAOs are the future of corporate structure that operates through smart-contracts on the blockchain**.** Unlike traditional organizations, DAOs lack a central authority and instead distribute power among their members.
 
-While some may argue that DAOs are still in their infancy and face governance challenges, we at Neural Internet see them as the future of empowerment, especially in the age of Stakeholder Capitalism and the burgeoning creator/knowledge economy.
+While some may argue that DAOs are still in their infancy and face governance challenges, we at Nodexo see them as the future of empowerment, especially in the age of Stakeholder Capitalism and the burgeoning creator/knowledge economy.
 
 **Key Benefits of Operating a DAO:**
 
@@ -16,4 +16,4 @@ While some may argue that DAOs are still in their infancy and face governance ch
 
 Operating a DAO offers a forward-looking approach to governance and organization, harnessing the power of blockchain for greater transparency, efficiency, and participatory decision-making. It represents a shift towards more egalitarian, adaptable, and transparent operations, making it an attractive model for organizations in the digital age.
 
-As we stand on the brink of a new era, we at Neural Internet invite you to join us in embracing DAOs for the transformative power they hold. Let's envision a future where DAOs and stakeholder capitalism coalesce, paving the way for a more just, inclusive, and sustainable world.
+As we stand on the brink of a new era, we at Nodexo invite you to join us in embracing DAOs for the transformative power they hold. Let's envision a future where DAOs and stakeholder capitalism coalesce, paving the way for a more just, inclusive, and sustainable world.
